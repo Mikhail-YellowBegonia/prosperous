@@ -2,11 +2,12 @@ import os
 import sys
 import time
 import threading
-from PIL import Image
+from PIL import Image, ImageFont, ImageDraw
 
 #region init
 
 is_running = True
+render_lock = threading.Lock() # New lock for buffer synchronization
 
 size_dump = (0,0)
 cli_width = 80
@@ -30,13 +31,14 @@ def listen_size():
         cli_width = size.columns
         cli_height = size.lines
 
-        # per char slot in prepare/buffer/dump: (char->str, fg->int, bg->int, style->int)
-        screen_prepare = [[(" ", 0, 0, 0) for _ in range(cli_width)] for _ in range(cli_height)]
-        screen_buffer = [[(" ", 0, 0, 0) for _ in range(cli_width)] for _ in range(cli_height)]
-        screen_dump = [[("A", 0, 0, 0) for _ in range(cli_width)] for _ in range(cli_height)]
+        with render_lock:
+            # per char slot in prepare/buffer/dump: (char->str, fg->int, bg->int, style->int)
+            screen_prepare = [[(" ", 0, 0, 0) for _ in range(cli_width)] for _ in range(cli_height)]
+            screen_buffer = [[(" ", 0, 0, 0) for _ in range(cli_width)] for _ in range(cli_height)]
+            screen_dump = [[("A", 0, 0, 0) for _ in range(cli_width)] for _ in range(cli_height)]
 
-        # per char slot in diff: (y, x, char, fg, bg, style)
-        screen_diff = []
+            # per char slot in diff: (y, x, char, fg, bg, style)
+            screen_diff = []
 
         clear_screen()
 
@@ -127,17 +129,108 @@ Features:
 
 
 
+from PIL import Image, ImageFont, ImageDraw
+
+# ... (rest of the imports and init region)
+
+class FontManager:
+    def __init__(self, font_path, size=16):
+        self.font_path = font_path
+        self.size = size
+        self.atlas = {} 
+        
+        debug_log(f"[FontManager] Loading: {font_path} at size {size}")
+        try:
+            self.font = ImageFont.truetype(font_path, size)
+            self._generate_atlas()
+        except Exception as e:
+            debug_log(f"[FontManager] Error: {e}")
+            self.font = None
+
+    def _generate_atlas(self):
+        debug_log(f"[FontManager] Starting RAW atlas generation with Visual Debug. Font: {self.font_path}")
+        valid_count = 0
+        for i in range(32, 127):
+            char = chr(i)
+            try:
+                # Using mode='L' is most reliable as it returns 1 byte per pixel (0-255)
+                mask = self.font.getmask(char, mode='L')
+                w, h = mask.size
+                
+                if w == 0 or h == 0:
+                    self.atlas[char] = [[0] * 8 for _ in range(8)]
+                    continue
+
+                matrix = []
+                for y in range(h):
+                    row = []
+                    for x in range(w):
+                        # Directly access mask pixels
+                        val = 1 if mask.getpixel((x, y)) > 0 else 0
+                        row.append(val)
+                    matrix.append(row)
+                
+                self.atlas[char] = matrix
+                valid_count += 1
+                
+                # Visual Debug for character 'S' in debug.log
+                if char == 'S':
+                    debug_log(f"[FontManager] --- Visual Matrix for 'S' ({w}x{h}) ---")
+                    for row_data in matrix:
+                        line = "".join(["#" if v else "." for v in row_data])
+                        debug_log(line)
+                    debug_log("[FontManager] ---------------------------------------")
+
+            except Exception as e:
+                debug_log(f"[FontManager] Error processing char '{char}': {e}")
+                self.atlas[char] = [[0]]
+
+        debug_log(f"[FontManager] Atlas complete. {valid_count} chars loaded.")
+
+    def get_char(self, char):
+        return self.atlas.get(char, [[0]])
+
+class BigTextRenderer:
+    def __init__(self, font_manager):
+        self.fm = font_manager
+
+    def render_string(self, text, start_y, start_x, fg=(255, 255, 255), bg=None, push_func=None):
+        if not text: return
+        
+        char_matrices = [self.fm.get_char(c) for c in text]
+        
+        # 1. Determine bounding box (As-Is 1:1 mapping)
+        max_h = max(len(m) for m in char_matrices)
+        total_w = sum(len(m[0]) for m in char_matrices)
+        
+        full_matrix = [[0 for _ in range(total_w)] for _ in range(max_h)]
+        
+        curr_x = 0
+        for matrix in char_matrices:
+            h = len(matrix)
+            w = len(matrix[0])
+            for y in range(h):
+                for x in range(w):
+                    full_matrix[y][curr_x + x] = matrix[y][x]
+            curr_x += w
+        
+        # 2. Draw using BinmapRenderer
+        br = BinmapRenderer(full_matrix, fg=fg, bg=bg)
+        br.draw(start_y, start_x, push_func)
+
 class ImageRenderer:
 
     def __init__(self, path: str, target_width: int, enable_256_color_reduction: bool = False):
         self.path = path
         self.width = target_width
         self.pixels = None
+        self.processed_colors = [] # Cache for processed color data
         self.height = 0
         self.enable_256_color_reduction = enable_256_color_reduction
         self._palette_map = None # Stores mapping from Pillow's palette index to standard ANSI 256 index
         
         self._load_and_resize()
+        self._preprocess_colors() # Pre-calculate all colors once
 
     # Helper to generate the standard 256-color palette for mapping.
     # This is a common approximation. A more precise mapping might involve
@@ -172,8 +265,6 @@ class ImageRenderer:
     # Cache the generated palette to avoid recomputing it for every instance
     _ansi256_palette_rgb_cache = _generate_ansi256_palette_rgb()
 
-    # Converts an RGB tuple to the closest standard ANSI 256-color index.
-    # This function can be replaced by a more optimized lookup table if provided.
     def _rgb_to_ansi256(self, rgb_tuple: tuple) -> int:
         r, g, b = rgb_tuple[:3]
         min_dist = float('inf')
@@ -186,24 +277,29 @@ class ImageRenderer:
                 closest_idx = i
         return closest_idx
 
+    def _preprocess_colors(self):
+        """Pre-calculates colors for all pixels to avoid per-frame overhead."""
+        self.processed_colors = [[None for _ in range(self.width)] for _ in range(self.height)]
+        for y in range(self.height):
+            for x in range(self.width):
+                pixel = self.pixels[x, y]
+                if self.enable_256_color_reduction:
+                    self.processed_colors[y][x] = self._rgb_to_ansi256(pixel)
+                else:
+                    self.processed_colors[y][x] = pixel
+
     def _load_and_resize(self):
         global cli_width, cli_height # Access global terminal dimensions
 
-        img = Image.open(self.path).convert('RGBA') # Read as RGBA to support transparency
+        img = Image.open(self.path).convert('RGBA')
         aspect = img.height / img.width
 
         original_img_width = img.width
         original_img_height = img.height
 
-        # Determine the maximum allowed dimensions based on all constraints
         max_allowed_width = min(original_img_width, cli_width, self.width)
-
-
         max_allowed_height = min(original_img_height, cli_height * 2)
 
-
-        
-        # Start by scaling based on the max_allowed_width.
         calculated_width = max_allowed_width
         calculated_height = int(calculated_width * aspect)
 
@@ -229,35 +325,65 @@ class ImageRenderer:
         threshold = 128
         for y in range(0, self.height, 2):
             for x in range(self.width):
-                top = self.pixels[x, y]
-                bottom = self.pixels[x, y+1]
+                top_raw = self.pixels[x, y]
+                bottom_raw = self.pixels[x, y+1]
                 
-                # Check alpha channels if they exist
-                t_alpha = top[3] if len(top) > 3 else 255
-                b_alpha = bottom[3] if len(bottom) > 3 else 255
-
-                # Pre-process colors for the final push
-                if self.enable_256_color_reduction:
-                    top_color = self._rgb_to_ansi256(top)
-                    bottom_color = self._rgb_to_ansi256(bottom)
-                else:
-                    top_color = top
-                    bottom_color = bottom
+                # Use pre-calculated colors from cache
+                top_color = self.processed_colors[y][x]
+                bottom_color = self.processed_colors[y+1][x]
+                
+                # Alpha still needs to be checked from original pixels for transparency logic
+                t_alpha = top_raw[3] if len(top_raw) > 3 else 255
+                b_alpha = bottom_raw[3] if len(bottom_raw) > 3 else 255
 
                 if t_alpha < threshold and b_alpha < threshold:
                     # Both transparent, skip this cell
                     continue
                 elif t_alpha < threshold:
                     # Top transparent, draw bottom only using ▄ (lower half block)
-                    # We use the bottom color as the foreground of ▄
                     push_func(start_y + (y // 2), start_x + x, "▄", bottom_color, None, 0)
                 elif b_alpha < threshold:
                     # Bottom transparent, draw top only using ▀ (upper half block)
-                    # We use the top color as the foreground of ▀
                     push_func(start_y + (y // 2), start_x + x, "▀", top_color, None, 0)
                 else:
                     # Both opaque, draw normally
                     push_func(start_y + (y // 2), start_x + x, "▀", top_color, bottom_color, 0)
+
+class BinmapRenderer:
+    def __init__(self, binmap, fg=(255, 255, 255), bg=None, skip_empty=True):
+        """
+        binmap: A 2D list of 0/1 or booleans.
+        fg: Foreground color (RGB tuple or ANSI index).
+        bg: Background color.
+        skip_empty: If True, do not draw cells that are entirely background.
+        """
+        self.binmap = binmap
+        self.height = len(binmap)
+        self.width = len(binmap[0]) if self.height > 0 else 0
+        self.fg = fg
+        self.bg = bg
+        self.skip_empty = skip_empty
+        # Quadrant characters map (binary 2x2): TL=1, TR=2, BL=4, BR=8
+        # Index calculation: 1*TL + 2*TR + 4*BL + 8*BR
+        self.char_map = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"
+
+    def draw(self, start_y, start_x, push_func):
+        for y in range(0, self.height, 2):
+            for x in range(0, self.width, 2):
+                # Safely get 2x2 block pixels (handle potential odd dimensions)
+                tl = self.binmap[y][x] if y < self.height and x < self.width else 0
+                tr = self.binmap[y][x+1] if y < self.height and x+1 < self.width else 0
+                bl = self.binmap[y+1][x] if y+1 < self.height and x < self.width else 0
+                br = self.binmap[y+1][x+1] if y+1 < self.height and x+1 < self.width else 0
+
+                # Map 2x2 to 4-bit index
+                index = (1 if tl else 0) + (2 if tr else 0) + (4 if bl else 0) + (8 if br else 0)
+
+                if self.skip_empty and index == 0:
+                    continue
+                
+                char = self.char_map[index]
+                push_func(start_y + (y // 2), start_x + (x // 2), char, self.fg, self.bg, 0)
 
 
 
@@ -279,8 +405,9 @@ def render():
 
 def swap_buffers():
     global screen_buffer, screen_prepare
-    for y in range(cli_height):
-        screen_buffer[y] = screen_prepare[y][:]
+    with render_lock:
+        for y in range(cli_height):
+            screen_buffer[y] = screen_prepare[y][:]
 
 #endregion
 
@@ -390,22 +517,30 @@ def clear_prepare():
 def logic_loop():
     global frame_count, is_running
     
-    # Pre-initialize image to avoid high CPU usage in loop
+    # Pre-initialize resources
     image = ImageRenderer("img/sanae_RGBA.png", 59, True)
     
+    # Initialize font manager. 
+    # Using size 16 for better compatibility with Toshiba T300 style fonts.
+    fm = FontManager("ToshibaT300.ttf", 16) 
+    big_text = BigTextRenderer(fm)
     while is_running:
         # 1. 动态感知尺寸
         listen_size() 
         
-        # 2. 清除缓冲区，确保透明像素不会留残影
-        clear_prepare()
-        
-        # 3. 逻辑产出
-        text(1, 1, f"Frame: {frame_count}", "test256")
-        text(2, 1, "Hello, world", "test8")
+        with render_lock:
+            # 2. 清除缓冲区，确保透明像素不会留残影
+            clear_prepare()
+            
+            # 3. 逻辑产出
+            text(1, 1, f"Frame: {frame_count}", "test256")
+            text(2, 1, "Hello, world", "test8")
 
-        # 4. 绘制图像
-        image.draw(0, 0, push)
+            # 4. 绘制图像
+            image.draw(0, 0, push)
+            
+            # 5. 绘制超大字符测试 (SOS)
+            big_text.render_string("SOS", 15, 20, fg=(255, 50, 50), push_func=push)
         
         time.sleep(0.01)
 
