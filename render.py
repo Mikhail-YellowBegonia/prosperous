@@ -693,7 +693,7 @@ def logic_loop():
     # Pre-initialize resources
     image = ImageRenderer("img/sanae_RGBA.png", 59, True)
     # Re-using your earlier BinmapImageRenderer mention
-    logo = BinmapImageRenderer("img/Aliya.png", 20, fg=(100, 200, 250))
+    logo = BinmapImageRenderer("img/Aliya.png", 120, fg=(100, 200, 250))
     
     # Using vertical_compress=True for best proportions
     fm = FontManager("ToshibaT300.ttf", 16, vertical_compress=True) 
@@ -713,14 +713,15 @@ def logic_loop():
             text(2, 1, "Hello, world", "test8")
 
             # 4. 绘制图像 -> 推入 Image Space
-            image.draw(5, 5, push_image)
+            image.draw(1, 1, push_image)
             
             # 5. 绘制 Logo -> 推入 Binmap Space
-            logo.draw(5, 50, push_binmap)
+            logo.draw(28, 47, push_binmap)
             
-            # 6. 绘制超大字符 -> 推入 Binmap Space
+            # 6. 绘制大字符 -> 推入 Binmap Space
             # This demonstrates that multiple binmap calls can now merge!
-            big_text.render_string("SOS", 15, 20, fg=(255, 50, 50), push_func=push_binmap)
+            big_text.render_string(">>> Prosperous, Rich CLI Toolkit", 21, 60, fg=(150, 250, 250), push_func=push_binmap)
+
             
             # 7. 执行后期合成 (Compositing)
             # This combines spaces and does a single set of push() calls
