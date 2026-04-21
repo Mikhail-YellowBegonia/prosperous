@@ -72,23 +72,30 @@ class RenderEngine:
                 self.binmap_space[y][x] = None
         self.dirty_cells.clear()
 
-    def push(self, y, x, content, style=DEFAULT_STYLE):
-        if not self.screen_prepare or y < 0 or y >= len(self.screen_prepare): return
+    def push(self, y, x, content, style=None):
+        if style is None: style = DEFAULT_STYLE
+        if not self.screen_prepare: return
+        if y < 0 or y >= len(self.screen_prepare): return
+        
+        limit_x = len(self.screen_prepare[0])
         curr_x = x
         for char in content:
-            if curr_x < 0 or curr_x >= len(self.screen_prepare[0]): break
+            if curr_x < 0 or curr_x >= limit_x: break
+            # 宽字符处理
             width = 2 if ord(char) > 128 and not (0x2500 <= ord(char) <= 0x259F) else 1
             self.screen_prepare[y][curr_x] = (char, style)
             if width == 2:
-                if curr_x + 1 < len(self.screen_prepare[0]):
+                if curr_x + 1 < limit_x:
                     self.screen_prepare[y][curr_x + 1] = ("", style)
                 curr_x += 2
             else:
                 curr_x += 1
 
     def push_image(self, y, x, char, fg, bg):
-        if not self.image_space or y < 0 or y >= len(self.image_space) or x < 0 or x >= len(self.image_space[0]):
+        if not self.image_space: return
+        if y < 0 or y >= len(self.image_space) or x < 0 or x >= len(self.image_space[0]):
             return
+        # ... (后续逻辑保持，已包含安全检查)
         if self.image_space[y][x] is None:
             self.image_space[y][x] = [None, None]
         if char == "▀":
@@ -101,8 +108,10 @@ class RenderEngine:
         self.dirty_cells.add((y, x))
 
     def push_binmap(self, y, x, char, fg):
-        if not self.binmap_space or y < 0 or y >= len(self.binmap_space) or x < 0 or x >= len(self.binmap_space[0]):
+        if not self.binmap_space: return
+        if y < 0 or y >= len(self.binmap_space) or x < 0 or x >= len(self.binmap_space[0]):
             return
+        # ... (保持检查)
         bits = self.QUAD_TO_BITS.get(char, 0)
         if bits == 0: return
         if self.binmap_space[y][x] is None:
