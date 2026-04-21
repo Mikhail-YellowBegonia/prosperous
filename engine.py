@@ -25,6 +25,10 @@ class RenderEngine:
         self.binmap_space = []
         self.dirty_cells = set()
         
+        # Input State
+        self.last_key = None
+        self.input_events = []
+        
         self.last_cursor_pos = (-1, -1)
         self.size_dump = (0, 0)
         
