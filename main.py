@@ -7,7 +7,7 @@ def logic_loop(engine):
     # Ensure these paths match your actual files
     try:
         image = ImageRenderer("img/sanae_RGBA.png", 59, enable_256_color_reduction=True)
-        logo = BinmapImageRenderer("img/sanae_RGBA.png", 20, fg=(100, 200, 250))
+        logo = BinmapImageRenderer("img/Aliya.png", 120, fg=(100, 200, 250))
     except Exception as e:
         print(f"Error loading images: {e}")
         return
@@ -25,17 +25,10 @@ def logic_loop(engine):
             
             # Draw standard text via engine.push
             engine.push(1, 1, f"Frame: {frame_count}", 46, 0, 0)
-            engine.push(2, 1, "Prosperous Engine v0.2 - Modular Refactor", 7, 0, 0)
+            engine.push(2, 1, "Prosperous", 7, 0, 0)
 
-            # Draw Image -> Image Space
-            image.draw(5, 5, engine.push_image)
-            
-            # Draw Logo -> Binmap Space
-            logo.draw(5, 50, engine.push_binmap)
-            
-            # Draw Big Text -> Binmap Space
-            big_text.render_string("SOS", 15, 20, fg=(255, 50, 50), push_func=engine.push_binmap)
-            
+            # Insert your code here
+
             # Composite everything
             engine.flush_spaces()
         
