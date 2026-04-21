@@ -54,7 +54,7 @@ class BigTextRenderer:
     def __init__(self, font_manager):
         self.fm = font_manager
 
-    def render_string(self, text, start_y, start_x, fg=(255, 255, 255), push_func=None):
+    def render_string(self, text, start_y, start_x, fg=(255, 255, 255), push_binmap_func=None):
         if not text: return
         char_matrices = [self.fm.get_char(c) for c in text if len(self.fm.get_char(c)) > 0]
         if not char_matrices: return
@@ -71,8 +71,6 @@ class BigTextRenderer:
                     full_matrix[y][curr_x + x] = matrix[y][x]
             curr_x += w
         
-        # We need BinmapRenderer here, but to avoid circular import, 
-        # we will move Renderers to their own file and import there.
         from renderers import BinmapRenderer
         br = BinmapRenderer(full_matrix, fg=fg)
-        br.draw(start_y, start_x, push_func)
+        br.draw(start_y, start_x, push_binmap_func)

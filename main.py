@@ -3,35 +3,46 @@ import threading
 from __init__ import RenderEngine, ImageRenderer, BinmapImageRenderer, FontManager, BigTextRenderer, InputHandler, cleanup
 from components import InputBox
 
-def logic_loop(engine):
-    # 初始化组件
-    input_box = InputBox(width=40, label="TEST INPUT")
+from styles import Style
 
+from components import InputBox, Panel
+from interaction import FocusManager
+
+def logic_loop(engine):
+    # 阶段 3 测试：焦点系统
+    focus_manager = FocusManager()
+    
+    # 创建两个输入框
+    input1 = InputBox(pos=(4, 5), width=30, label="BOX ONE")
+    input2 = InputBox(pos=(4, 40), width=30, label="BOX TWO")
+    
+    focus_manager.add_component(input1)
+    focus_manager.add_component(input2)
+    
+    # 根面板容器
+    root_panel = Panel(pos=(2, 2), width=75, height=10, title="FOCUS SYSTEM TEST")
+    root_panel.add_child(input1)
+    root_panel.add_child(input2)
+    
     frame_count = 0
     while engine.is_running:
         engine.listen_size()
 
-        # 1. 处理输入逻辑 (从队列中取出并分发)
+        # 核心交互分发：全部交给 focus_manager
         with engine.lock:
             while engine.input_events:
                 key = engine.input_events.pop(0)
-                input_box.handle_input(key)
+                focus_manager.handle_input(key)
 
-        # 2. 准备渲染内容
         with engine.lock:
             engine.clear_prepare()
             engine.clear_spaces()
 
-            # 状态栏
-            engine.push(1, 1, f"Frame: {frame_count}", 46, 0, 0)
-            engine.push(2, 1, f"Status: Input Loop Ready", 208, 0, 0)
+            engine.push(1, 1, f"Frame: {frame_count}", Style(fg=46))
+            engine.push(12, 2, "Use LEFT/RIGHT to switch focus, type to see results.", Style(fg=244))
+            
+            root_panel.draw(engine)
 
-            # 渲染输入框组件
-            input_box.draw(5, 10, engine)
-
-            engine.push(9, 10, "Try Typing, Backspace, Enter.", 244, 0, 0)
-
-            # 合并图像空间并完成
             engine.flush_spaces()
 
         frame_count += 1

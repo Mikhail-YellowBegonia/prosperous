@@ -1,30 +1,38 @@
 import sys
 import os
 
-def ansilookup(fg, bg, style):
+def ansilookup(style_obj):
+    if style_obj is None:
+        return ""
+    
     parts = []
-    if style is not None:
-        parts.append(str(style))
+    
+    # 处理基础样式属性
+    style_map = {
+        'bold': '1', 'dim': '2', 'italic': '3', 
+        'underline': '4', 'blink': '5', 'reverse': '7', 
+        'hidden': '8', 'strike': '9'
+    }
+    
+    for attr, code in style_map.items():
+        if getattr(style_obj, attr, False):
+            parts.append(code)
 
+    fg = getattr(style_obj, 'fg', None)
     if fg is not None:
         if isinstance(fg, int):
-            if fg < 8:
-                parts.append(str(30 + fg))
-            elif fg < 16:
-                parts.append(str(90 + (fg - 8)))
-            else:
-                parts.append(f"38;5;{fg}")
+            if fg < 8: parts.append(str(30 + fg))
+            elif fg < 16: parts.append(str(90 + (fg - 8)))
+            else: parts.append(f"38;5;{fg}")
         elif isinstance(fg, tuple):
             parts.append(f"38;2;{fg[0]};{fg[1]};{fg[2]}")
 
+    bg = getattr(style_obj, 'bg', None)
     if bg is not None:
         if isinstance(bg, int):
-            if bg < 8:
-                parts.append(str(40 + bg))
-            elif bg < 16:
-                parts.append(str(100 + (bg - 8)))
-            else:
-                parts.append(f"48;5;{bg}")
+            if bg < 8: parts.append(str(40 + bg))
+            elif bg < 16: parts.append(str(100 + (bg - 8)))
+            else: parts.append(f"48;5;{bg}")
         elif isinstance(bg, tuple):
             parts.append(f"48;2;{bg[0]};{bg[1]};{bg[2]}")
 

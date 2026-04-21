@@ -1,4 +1,5 @@
 from PIL import Image
+from styles import Style
 
 class BinmapRenderer:
     def __init__(self, binmap, fg=(255, 255, 255), bg=None, skip_empty=True):
@@ -10,7 +11,7 @@ class BinmapRenderer:
         self.skip_empty = skip_empty
         self.char_map = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"
 
-    def draw(self, start_y, start_x, push_func):
+    def draw(self, start_y, start_x, push_binmap_func):
         for y in range(0, self.height, 2):
             for x in range(0, self.width, 2):
                 tl = self.binmap[y][x] if y < self.height and x < self.width else 0
@@ -19,7 +20,7 @@ class BinmapRenderer:
                 br = self.binmap[y+1][x+1] if (y+1) < self.height and (x+1) < self.width else 0
                 index = (1 if tl else 0) + (2 if tr else 0) + (4 if bl else 0) + (8 if br else 0)
                 if self.skip_empty and index == 0: continue
-                push_func(start_y + (y // 2), start_x + (x // 2), self.char_map[index], self.fg, self.bg, 0)
+                push_binmap_func(start_y + (y // 2), start_x + (x // 2), self.char_map[index], self.fg)
 
 class BinmapImageRenderer:
     def __init__(self, path, target_width, fg=(255, 255, 255), vertical_compress=True):
@@ -41,8 +42,8 @@ class BinmapImageRenderer:
             self.matrix.append(row)
         self.renderer = BinmapRenderer(self.matrix, fg=self.fg)
 
-    def draw(self, start_y, start_x, push_func):
-        self.renderer.draw(start_y, start_x, push_func)
+    def draw(self, start_y, start_x, push_binmap_func):
+        self.renderer.draw(start_y, start_x, push_binmap_func)
 
 class ImageRenderer:
     _palette_cache = None
@@ -90,7 +91,7 @@ class ImageRenderer:
                 min_dist, idx = d, i
         return idx
 
-    def draw(self, start_y, start_x, push_func):
+    def draw(self, start_y, start_x, push_image_func):
         threshold = 128
         for y in range(0, self.height, 2):
             for x in range(self.width):
@@ -100,6 +101,7 @@ class ImageRenderer:
                 b_alpha = b_raw[3] if len(b_raw) > 3 else 255
 
                 if t_alpha < threshold and b_alpha < threshold: continue
-                elif t_alpha < threshold: push_func(start_y + (y // 2), start_x + x, "▄", b_color, None, 0)
-                elif b_alpha < threshold: push_func(start_y + (y // 2), start_x + x, "▀", t_col, None, 0)
-                else: push_func(start_y + (y // 2), start_x + x, "▀", t_col, b_color, 0)
+                elif t_alpha < threshold: push_image_func(start_y + (y // 2), start_x + x, "▄", b_color, None)
+                elif b_alpha < threshold: push_image_func(start_y + (y // 2), start_x + x, "▀", t_col, None)
+                else: push_image_func(start_y + (y // 2), start_x + x, "▀", t_col, b_color)
+
