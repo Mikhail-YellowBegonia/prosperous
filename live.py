@@ -7,6 +7,26 @@ from utils import cleanup
 
 
 class Live:
+    """Prosperous 应用入口，以上下文管理器方式使用。
+
+    内部管理渲染线程、输入线程，并负责退出时恢复终端状态。
+
+    参数：
+        fps:       渲染帧率（screen_buffer → 终端输出的频率），默认 30。
+        logic_fps: 逻辑帧率（poll() 的最高调用频率）。None 表示不限速，
+                   由用户自行控制循环节奏。建议设为 fps 的 1～2 倍。
+
+    典型用法：
+        with Live(fps=30, logic_fps=60) as live:
+            live.add(my_panel)
+            while live.running:
+                for key in live.poll():
+                    if key == "ESC": live.engine.is_running = False
+                    focus.handle_input(key)
+                with live.frame():
+                    pass  # 场景组件已由 frame() 自动绘制
+    """
+
     def __init__(self, fps: int = 30, logic_fps: int = None):
         self.fps = fps
         self._logic_interval = (1.0 / logic_fps) if logic_fps else 0

@@ -2,6 +2,20 @@ from typing import List, Optional
 from components import BaseComponent
 
 class FocusManager:
+    """管理可聚焦组件之间的焦点切换与输入分发。
+
+    焦点切换：方向键（UP/DOWN/LEFT/RIGHT）在已注册组件间线性循环。
+    输入分发：ENTER 触发当前焦点组件的 on_enter，其余按键先经 on_key，
+              再交给 handle_input（on_key 返回 False 可拦截）。
+
+    示例：
+        focus = FocusManager()
+        focus.add_component(input_box)
+        focus.add_component(button)
+
+        for key in live.poll():
+            focus.handle_input(key)
+    """
     def __init__(self):
         self.focusable_components: List[BaseComponent] = []
         self.focused_index: int = -1

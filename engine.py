@@ -167,12 +167,16 @@ class RenderEngine:
     def render(self):
         self.find_diff()
         if not self.screen_diff: return
-        
+
+        last_style = None
         for y, x, char, style in self.screen_diff:
             if y != self.last_cursor_pos[0] or x != self.last_cursor_pos[1] + 1:
                 sys.stdout.write(f"\033[{y + 1};{x + 1}H")
-            sys.stdout.write(f"{ansilookup(style)}{char}")
+            if style != last_style:
+                sys.stdout.write(ansilookup(style))
+                last_style = style
+            sys.stdout.write(char)
             self.last_cursor_pos = (y, x)
-            
+
         sys.stdout.flush()
         self.screen_dump = [row[:] for row in self.screen_buffer]

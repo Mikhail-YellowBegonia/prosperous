@@ -1,7 +1,7 @@
 import time
 import random
 from live import Live
-from components import Panel, InputBox, Text, ProgressBar, LogView
+from components import Panel, InputBox, Button, Text, ProgressBar, LogView
 from interaction import FocusManager
 from styles import Style
 
@@ -33,8 +33,9 @@ with Live(fps=30, logic_fps=60) as live:
     log   = LogView(pos=(1, 1), width=W - 2, height=5, style=Style(fg=250))
     log.append("[SYSTEM] Prosperous Monitor started.")
 
-    cmd_box    = InputBox(pos=(1, 1), width=40, label="COMMAND")
-    txt_status = Text(pos=(1, 44), text=lambda: f"Status: {status_text}", style=Style(fg=82))
+    cmd_box    = InputBox(pos=(1, 1),  width=34, label="COMMAND")
+    btn_submit = Button( pos=(1, 38), label="Submit", width=12)
+    txt_status = Text(   pos=(1, 52), text=lambda: f"[ {status_text} ]", style=Style(fg=82))
 
     live.add(Panel(
         pos=(1, 2), width=W, height=7, title="METRICS",
@@ -45,24 +46,28 @@ with Live(fps=30, logic_fps=60) as live:
             ProgressBar(pos=(2, 7),  width=30, value=next_mem,
                         filled_style=Style(fg=(100, 160, 240))),
             Text(pos=(4, 2),  text=lambda: f"Uptime  {uptime_str()}", style=Style(fg=244)),
-            Text(pos=(4, 30), text="Render  30 fps",               style=Style(fg=244)),
+            Text(pos=(4, 30), text="Render  30 fps",                  style=Style(fg=244)),
         ]
     ))
-    live.add(Panel(pos=(9, 2),  width=W, height=7, title="LOG",     children=[log]))
-    live.add(Panel(pos=(17, 2), width=W, height=5, title="CONTROL", children=[cmd_box, txt_status]))
-    live.add(Text(pos=(23, 2), text="ENTER: submit  |  ESC: quit", style=Style(fg=238)))
+    live.add(Panel(pos=(9,  2), width=W, height=7, title="LOG",     children=[log]))
+    live.add(Panel(pos=(17, 2), width=W, height=5, title="CONTROL",
+                   children=[cmd_box, btn_submit, txt_status]))
+    live.add(Text(pos=(23, 2), text="TAB/Arrows: focus  |  ENTER: submit  |  ESC: quit",
+                  style=Style(fg=238)))
 
     focus.add_component(cmd_box)
+    focus.add_component(btn_submit)
 
     def on_submit():
         global status_text
         cmd = cmd_box.text.strip()
         if cmd:
             log.append(f"[CMD] {cmd}")
-            status_text = f"last: {cmd[:20]}"
+            status_text = cmd[:18]
         cmd_box.text = ""
 
-    cmd_box.on_enter = on_submit
+    cmd_box.on_enter  = on_submit
+    btn_submit.on_enter = on_submit
 
     while live.running:
         for key in live.poll():
