@@ -1,40 +1,63 @@
-# Known Issues - Prosperous Audit Report
+# Known Issues & Roadmap
 
 ## 🔴 [Critical] 稳定性与正确性
 
-### [engine] SIGWINCH 信号处理死锁
-- **位置**：`engine.py` → `__init__` 信号注册 / `listen_size()`
-- **现象**：若 SIGWINCH 在主线程持有 `engine.lock`（即 `frame()` 上下文内）期间触发，信号处理器直接调用 `listen_size()`，后者尝试获取同一把不可重入锁，导致主线程死锁。
-- **状态**：✅ 已修复。信号处理器改为仅设置 `_resize_pending = True`，实际 resize 推迟到 `poll()` 调用 `listen_size()` 时执行（此时主线程不持锁）。
+### [engine] SIGWINCH 信号处理死锁 ✅ 已修复
+信号处理器改为只设 `_resize_pending` flag，`listen_size()` 推迟到 `poll()` 中执行，
+避免在持锁期间触发死锁。
 
-### [render] 伪差分渲染：ANSI 协议状态机低效
-- **位置**：`utils.py` → `ansilookup()`，`engine.py` → `render()`
-- **现象**：每个差分格子前均发送 `\033[0m` reset 再重新声明样式，抵消了差分渲染的传输优化。
-- **后果**：SSH 等高延迟环境下画面撕裂感明显，终端解析压力大。
-- **修复方向**：`render()` 内维护 `prev_style`，仅在样式变化时发送最小增量 ANSI 序列，无变化时不发任何控制字符。
+---
 
-## 🟡 [Performance] 性能瓶颈
+## 🟡 [Near-term] 近期待做
 
-### [component] 样式与坐标解析递归无缓存
-- **位置**：`BaseComponent` → `get_absolute_pos()` & `get_effective_style()`
-- **现象**：每帧每组件从根节点递归累加坐标和合并样式，深树下 CPU 浪费明显。
-- **当前影响**：树浅，暂无感知。
-- **修复方向**：引入脏标记（Dirty Flag），仅在父节点位置或样式变化时更新子节点缓存值。
+### [interaction] 焦点系统缺乏隔离机制
+- **现象**：打开 Modal 时底层组件仍可被 TAB 选中并触发，无法安全实现多层交互。
+- **方案**：`FocusManager` 内置焦点栈，`push_group([...])` 压栈隔离，`pop_group()` 自动恢复，无需用户手动 clear/add。
+- **备注**：空间导航（按方向键做坐标查找）是独立问题，依赖坐标缓存机制，暂缓。
 
-### [engine] 缓冲区交换全量拷贝
-- **位置**：`engine.py` → `swap_buffers()`
-- **现象**：`[:]` 全量行切片拷贝，高分屏（200×60）高频刷新下内存压力显著。
-- **当前影响**：80×24 下可忽略。
-- **修复方向**：三指针引用交换（Triple Buffering Pointer Swap），交换引用而非拷贝数据。
+### [layout] 绝对坐标系人体工程学差
+- **现象**：子组件 `pos` 语义不清（相对边框还是内容区？），开发者必须硬编码大量 `+1` 偏移。
+- **近期方案**：`Panel` 支持 `padding` 参数，子组件 `pos=(0,0)` 即为内容区左上角。
+- **中期方案**：`VStack` / `HStack` 容器，子组件无需写 `pos`，自动顺序排列。两者递进，`padding` 先做。
 
-## 🔵 [Architecture] 架构缺陷
+### [component] 缺少 `visible` 属性
+- **现象**：隐藏组件只能靠修改坐标或从 scene 移除，前者留有渲染负担，后者重新显示时需重新注册。
+- **方案**：`BaseComponent` 添加 `visible: bool = True`，`draw()` 开头检查，为 False 时直接返回。
+
+### [api] 小型 API 完善
+- `live.stop()` 封装 `live.engine.is_running = False`，屏蔽底层细节。
+- `Panel.remove_child(child)` 补全容器 API。
+- `InputBox` 聚焦颜色硬编码为 `fg=220`，应改为 `focus_style` 参数支持自定义。
+
+---
+
+## 🔵 [Mid-term] 中期架构
+
+### [render] ANSI 增量渲染仍可优化
+- **现状**：样式相同的连续格子已不重复发送 ANSI 码（按 `last_style` 跳过）。
+- **剩余问题**：样式变化时仍发送完整 `\033[0m` + 重声明，未做真正的增量 diff。
+- **方案**：维护 `RenderContext` 记录各属性当前状态，仅发送变化的属性码。SSH 高延迟环境收益明显。
+
+### [layout] 组件匿名，动态引用依赖外部变量
+- **现象**：组件在树里没有 id/key，调试和运行时查找只能靠用户自己保留引用。
+- **方案**：`BaseComponent` 支持可选 `id` 参数，`live.find(id)` 或 `panel.find(id)` 查询。
 
 ### [live] frame() 持锁时间长，渲染线程实际串行化
-- **位置**：`live.py` → `frame()` / `_render_loop()`
-- **现象**：`frame()` 持 `engine.lock` 期间，`swap_buffers()` 阻塞等待，多线程优势基本丧失。
-- **修复方向**：分离"组件 → screen_prepare"写入阶段与"screen_prepare → screen_buffer"交换阶段，缩短主锁持有时间。
+- **现状**：draw 阶段持有 `engine.lock`，`swap_buffers()` 阻塞等待，多线程优势受限。
+- **方案**：分离 prepare 写入阶段与 buffer 交换阶段，缩短主锁持有时间。待性能优化节点统一处理。
 
-### [InputBox] draw() 中直接修改状态
-- **位置**：`components.py` → `InputBox.draw()`
-- **现象**：光标闪烁逻辑（`cursor_visible` 翻转）写在渲染路径中，违反渲染函数纯函数原则，闪烁频率受帧率约束。
-- **修复方向**：光标状态由独立定时器或 `on_focus` 触发的后台逻辑驱动，`draw()` 只读状态。
+---
+
+## ⚪ [Deferred] 暂缓
+
+### [layout] 空间焦点导航
+- 按方向键时按实际坐标查找最近组件，而非线性循环。
+- 依赖坐标缓存机制（需 dirty flag），与焦点栈独立，优先级低于焦点栈。
+
+### [engine] 缓冲区交换全量拷贝
+- `swap_buffers()` 用 `[:]` 全量拷贝，高分屏高频刷新下有内存压力。
+- 当前规模（80×24）可忽略，性能优化节点统一处理。
+
+### [component] 坐标/样式递归无缓存
+- `get_absolute_pos()` 和 `get_effective_style()` 每帧递归，深树下浪费。
+- 当前树浅，性能优化节点统一处理（引入 dirty flag）。

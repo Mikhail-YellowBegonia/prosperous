@@ -110,8 +110,8 @@ class InputBox(BaseComponent):
         box.on_enter = lambda: submit(box.text)
     """
 
-    def __init__(self, pos=(0, 0), width=40, label="INPUT", style=None):
-        super().__init__(pos=pos, style=style, focusable=True)
+    def __init__(self, pos=(0, 0), width=40, label="INPUT", style=None, layer=0):
+        super().__init__(pos=pos, style=style, layer=layer, focusable=True)
         self.width = width
         self.label = label
         self.text = ""
@@ -192,8 +192,8 @@ class Button(BaseComponent):
         btn.on_enter = lambda: do_something()
     """
 
-    def __init__(self, pos=(0, 0), label="BUTTON", width=None, style=None):
-        super().__init__(pos=pos, style=style, focusable=True)
+    def __init__(self, pos=(0, 0), label="BUTTON", width=None, style=None, layer=0):
+        super().__init__(pos=pos, style=style, layer=layer, focusable=True)
         self.label = label
         self.width = width if width is not None else get_visual_width(label) + 4
 
@@ -224,8 +224,8 @@ class Panel(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, children=None):
-        super().__init__(pos=pos, style=style, children=children)
+    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, layer=0, children=None):
+        super().__init__(pos=pos, style=style, layer=layer, children=children)
         self.width = width
         self.height = height
         self.title = title
@@ -257,8 +257,8 @@ class Text(BaseComponent):
         Text(pos=(1, 0), text=lambda: f"计数: {counter}", style=Style(fg=46))
     """
 
-    def __init__(self, pos=(0, 0), text: Union[str, Callable[[], str]] = "", style=None):
-        super().__init__(pos=pos, style=style)
+    def __init__(self, pos=(0, 0), text: Union[str, Callable[[], str]] = "", style=None, layer=0):
+        super().__init__(pos=pos, style=style, layer=layer)
         self._text = text
 
     def draw(self, engine):
@@ -283,8 +283,8 @@ class ProgressBar(BaseComponent):
     """
 
     def __init__(self, pos=(0, 0), width=20, value: Union[float, Callable[[], float]] = 0.0,
-                 filled_style=None, empty_style=None, style=None):
-        super().__init__(pos=pos, style=style)
+                 filled_style=None, empty_style=None, style=None, layer=0):
+        super().__init__(pos=pos, style=style, layer=layer)
         self._value = value
         self.width = width
         self.filled_style = filled_style or Style(fg=(80, 200, 120))
@@ -318,8 +318,8 @@ class LogView(BaseComponent):
         log.append("[INFO] 应用启动")
     """
 
-    def __init__(self, pos=(0, 0), width=40, height=5, style=None):
-        super().__init__(pos=pos, style=style)
+    def __init__(self, pos=(0, 0), width=40, height=5, style=None, layer=0):
+        super().__init__(pos=pos, style=style, layer=layer)
         self.width = width
         self.height = height
         self._lines: List[str] = []
@@ -345,7 +345,8 @@ class LogView(BaseComponent):
                     else:
                         cut = len(line)
                     line = line[:cut] + "…"
-                engine.push(ay + i, ax, line.ljust(self.width), eff)
+                padding = max(0, self.width - get_visual_width(line))
+                engine.push(ay + i, ax, line + " " * padding, eff)
             super().draw(engine)
         except Exception as e:
             debug_log(f"[LogView] Draw failed: {e}")

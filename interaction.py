@@ -28,6 +28,13 @@ class FocusManager:
                 component.is_focused = True
                 component.on_focus()
 
+    def clear(self):
+        """移除所有已注册组件并重置焦点状态，用于切换焦点组（如打开/关闭 modal）。"""
+        for c in self.focusable_components:
+            c.is_focused = False
+        self.focusable_components = []
+        self.focused_index = -1
+
     def get_focused(self) -> Optional[BaseComponent]:
         if 0 <= self.focused_index < len(self.focusable_components):
             return self.focusable_components[self.focused_index]

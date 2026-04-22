@@ -72,9 +72,16 @@ class Live:
         return events
 
     def add(self, component) -> None:
-        """注册顶层组件到场景，frame() 时自动绘制。运行时增删均可直接操作 live._scene。"""
+        """注册顶层组件到场景，frame() 时自动绘制。"""
         if component not in self._scene:
             self._scene.append(component)
+
+    def remove(self, component) -> None:
+        """从场景中移除组件，下一帧起不再绘制。组件本身不会被销毁，可重新 add()。"""
+        try:
+            self._scene.remove(component)
+        except ValueError:
+            pass
 
     @contextlib.contextmanager
     def frame(self):
