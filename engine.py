@@ -99,10 +99,13 @@ class RenderEngine:
             else:
                 curr_x += 1
 
+    def _space_in_bounds(self, y, x) -> bool:
+        return (bool(self.image_space)
+                and 0 <= y < len(self.image_space)
+                and 0 <= x < len(self.image_space[0]))
+
     def push_image(self, y, x, char, fg, bg):
-        if not self.image_space: return
-        if y < 0 or y >= len(self.image_space) or x < 0 or x >= len(self.image_space[0]):
-            return
+        if not self._space_in_bounds(y, x): return
         if self.image_space[y][x] is None:
             self.image_space[y][x] = [None, None]
         if char == "▀":
@@ -115,9 +118,7 @@ class RenderEngine:
         self.dirty_cells.add((y, x))
 
     def push_binmap(self, y, x, char, fg):
-        if not self.binmap_space: return
-        if y < 0 or y >= len(self.binmap_space) or x < 0 or x >= len(self.binmap_space[0]):
-            return
+        if not self._space_in_bounds(y, x): return
         bits = self.QUAD_TO_BITS.get(char, 0)
         if bits == 0: return
         if self.binmap_space[y][x] is None:

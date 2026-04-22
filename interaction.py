@@ -44,5 +44,6 @@ class FocusManager:
         elif key == "ENTER":
             focused.on_enter()
         else:
-            # 将其它按键分发给当前焦点组件
-            focused.handle_input(key)
+            result = focused.on_key(key)
+            if result is not False:
+                focused.handle_input(key)

@@ -27,6 +27,10 @@ class BaseComponent:
     def on_enter(self):
         pass
 
+    def on_key(self, key: str):
+        """按键到达组件前触发。返回 False 可阻止默认的 handle_input 行为。"""
+        pass
+
     def handle_input(self, key: str):
         pass
 
@@ -81,13 +85,11 @@ class InputBox(BaseComponent):
             if key == "BACKSPACE":
                 self.text = self.text[:-1]
             elif key == "SPACE":
-                self.text += " "
-            elif len(key) >= 1: 
-                # Whitelist based filtering
-                if key not in InputHandler.CONTROL_KEYS and not key.startswith("SEQ("):
-                    # 限制长度 (考虑宽字符占位，目前简单截断)
-                    if len(self.text) < self.width - 4:
-                        self.text += key
+                if get_visual_width(self.text) < self.width - 3:
+                    self.text += " "
+            elif key not in InputHandler.CONTROL_KEYS and not key.startswith("SEQ("):
+                if get_visual_width(self.text) + get_visual_width(key) <= self.width - 3:
+                    self.text += key
         except Exception as e:
             debug_log(f"[InputBox] Input handle failed: {e}")
 
