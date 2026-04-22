@@ -11,6 +11,7 @@ class FocusManager:
             self.focusable_components.append(component)
             if self.focused_index == -1:
                 self.focused_index = 0
+                component.is_focused = True
                 component.on_focus()
 
     def get_focused(self) -> Optional[BaseComponent]:
@@ -21,19 +22,21 @@ class FocusManager:
     def move_focus(self, direction: str):
         """简单的线性焦点切换，后续可升级为空间坐标计算"""
         if not self.focusable_components: return
-        
-        old_focused = self.get_focused()
-        if old_focused:
-            old_focused.on_blur()
+
+        old = self.get_focused()
+        if old:
+            old.is_focused = False
+            old.on_blur()
 
         if direction in ["RIGHT", "DOWN"]:
             self.focused_index = (self.focused_index + 1) % len(self.focusable_components)
         elif direction in ["LEFT", "UP"]:
             self.focused_index = (self.focused_index - 1) % len(self.focusable_components)
 
-        new_focused = self.get_focused()
-        if new_focused:
-            new_focused.on_focus()
+        new = self.get_focused()
+        if new:
+            new.is_focused = True
+            new.on_focus()
 
     def handle_input(self, key: str):
         focused = self.get_focused()

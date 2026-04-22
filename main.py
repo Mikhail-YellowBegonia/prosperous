@@ -6,7 +6,7 @@ from styles import Style
 frame_count = 0
 last_submit = ""
 
-with Live(fps=30) as live:
+with Live(fps=30, logic_fps=60) as live:
     focus = FocusManager()
 
     panel  = Panel(pos=(2, 2), width=75, height=8, title="EVENT DISPATCH TEST")

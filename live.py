@@ -7,8 +7,9 @@ from utils import cleanup
 
 
 class Live:
-    def __init__(self, fps: int = 30):
+    def __init__(self, fps: int = 30, logic_fps: int = None):
         self.fps = fps
+        self._logic_interval = (1.0 / logic_fps) if logic_fps else 0
         self.engine: RenderEngine = None
         self._input_handler: InputHandler = None
         self._render_thread: threading.Thread = None
@@ -36,11 +37,11 @@ class Live:
         return self.engine.is_running
 
     def poll(self) -> list[str]:
-        """限速至 fps，检测终端尺寸变化，返回本帧所有按键事件并清空队列。"""
-        interval = 1.0 / self.fps
-        elapsed = time.perf_counter() - self._last_poll
-        if elapsed < interval:
-            time.sleep(interval - elapsed)
+        """限速至 logic_fps（未设置则不限速），检测终端尺寸，返回本帧按键事件并清空队列。"""
+        if self._logic_interval > 0:
+            elapsed = time.perf_counter() - self._last_poll
+            if elapsed < self._logic_interval:
+                time.sleep(self._logic_interval - elapsed)
         self._last_poll = time.perf_counter()
 
         self.engine.listen_size()
