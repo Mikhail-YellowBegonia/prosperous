@@ -81,9 +81,13 @@ class InputBox(BaseComponent):
                 self.text = self.text[:-1]
             elif key == "SPACE":
                 self.text += " "
-            elif len(key) == 1: 
-                if len(self.text) < self.width - 4:
-                    self.text += key
+            elif len(key) >= 1: 
+                # 支持多字符 (针对 IME 最终输出的完整字符)
+                # 排除我们定义的特殊控制键名（全大写）
+                if not (key.isupper() and len(key) > 1):
+                    # 限制长度 (考虑宽字符占位，这里简单按字符数算，后续可优化)
+                    if len(self.text) < self.width - 4:
+                        self.text += key
         except Exception as e:
             debug_log(f"[InputBox] Input handle failed: {e}")
 
