@@ -3,20 +3,24 @@ from typing import Callable, List, Optional, Union
 from utils import debug_log, get_visual_width
 
 class BaseComponent:
-    def __init__(self, pos: tuple = (0, 0), style: Optional[Style] = None, layer: int = 0, focusable: bool = False):
-        # 鲁棒性：允许负数坐标和列表输入，仅对完全无法解析的输入进行兜底
+    def __init__(self, pos: tuple = (0, 0), style: Optional[Style] = None, layer: int = 0,
+                 focusable: bool = False, children: List['BaseComponent'] = None):
         try:
             self.pos = (int(pos[0]), int(pos[1]))
         except (TypeError, IndexError, ValueError):
             debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, defaulting to (0, 0)")
             self.pos = (1, 1)
-            
+
         self.style = style or Style()
         self.layer = layer
         self.focusable = focusable
         self.is_focused = False
         self.parent: Optional['BaseComponent'] = None
         self.children: List['BaseComponent'] = []
+
+        if children:
+            for child in children:
+                self.add_child(child)
 
     def on_focus(self):
         self.is_focused = True
@@ -152,8 +156,8 @@ class InputBox(BaseComponent):
             debug_log(f"[InputBox] Draw failed: {e}")
 
 class Panel(BaseComponent):
-    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None):
-        super().__init__(pos=pos, style=style)
+    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, children=None):
+        super().__init__(pos=pos, style=style, children=children)
         self.width = width
         self.height = height
         self.title = title
@@ -191,3 +195,62 @@ class Text(BaseComponent):
             super().draw(engine)
         except Exception as e:
             debug_log(f"[Text] Draw failed: {e}")
+
+class ProgressBar(BaseComponent):
+    def __init__(self, pos=(0, 0), width=20, value: Union[float, Callable[[], float]] = 0.0,
+                 filled_style=None, empty_style=None, style=None):
+        super().__init__(pos=pos, style=style)
+        self._value = value
+        self.width = width
+        self.filled_style = filled_style or Style(fg=(80, 200, 120))
+        self.empty_style = empty_style or Style(fg=(60, 60, 60))
+
+    def draw(self, engine):
+        try:
+            v = max(0.0, min(1.0, self._value() if callable(self._value) else self._value))
+            ay, ax = self.get_absolute_pos()
+            inner = self.width - 5          # 留给 " XX%" 后缀
+            filled = round(inner * v)
+            empty = inner - filled
+            pct = f"{round(v * 100):>3}%"
+            engine.push(ay, ax, "█" * filled, self.filled_style)
+            engine.push(ay, ax + filled, "░" * empty, self.empty_style)
+            engine.push(ay, ax + inner, pct, self.get_effective_style())
+            super().draw(engine)
+        except Exception as e:
+            debug_log(f"[ProgressBar] Draw failed: {e}")
+
+class LogView(BaseComponent):
+    """固定行数的日志视图，滚动逻辑留空待后续实现。"""
+    def __init__(self, pos=(0, 0), width=40, height=5, style=None):
+        super().__init__(pos=pos, style=style)
+        self.width = width
+        self.height = height
+        self._lines: List[str] = []
+
+    def append(self, msg: str):
+        self._lines.append(msg)
+        if len(self._lines) > self.height:
+            self._lines.pop(0)
+
+    def draw(self, engine):
+        try:
+            ay, ax = self.get_absolute_pos()
+            eff = self.get_effective_style()
+            for i in range(self.height):
+                line = self._lines[i] if i < len(self._lines) else ""
+                # 截断超宽行
+                if get_visual_width(line) > self.width:
+                    budget, cut = 0, 0
+                    for j, ch in enumerate(line):
+                        if budget + get_visual_width(ch) > self.width - 1:
+                            cut = j
+                            break
+                        budget += get_visual_width(ch)
+                    else:
+                        cut = len(line)
+                    line = line[:cut] + "…"
+                engine.push(ay + i, ax, line.ljust(self.width), eff)
+            super().draw(engine)
+        except Exception as e:
+            debug_log(f"[LogView] Draw failed: {e}")

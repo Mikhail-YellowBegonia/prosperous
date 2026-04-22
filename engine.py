@@ -31,13 +31,14 @@ class RenderEngine:
         # Input State
         self.last_key = None
         self.input_events = []
-        
+
         self.last_cursor_pos = (-1, -1)
         self.size_dump = (0, 0)
-        
-        # Register signal for resizing
+        self._resize_pending = False
+
+        # SIGWINCH 只设 flag，实际 resize 在 poll() 调用 listen_size() 时执行，避免持锁期间死锁
         try:
-            signal.signal(signal.SIGWINCH, lambda signum, frame: self.listen_size())
+            signal.signal(signal.SIGWINCH, lambda signum, frame: setattr(self, '_resize_pending', True))
         except AttributeError:
             pass
             
@@ -47,6 +48,8 @@ class RenderEngine:
         sys.stdout.flush()
 
     def listen_size(self):
+        if not self._resize_pending and self.size_dump != (0, 0):
+            return
         try:
             size = os.get_terminal_size()
         except OSError:
@@ -56,19 +59,19 @@ class RenderEngine:
             with self.lock:
                 self.cli_width = size.columns
                 self.cli_height = size.lines
-                
-                # Reallocate all buffers
+
                 self.screen_prepare = [[(" ", DEFAULT_STYLE) for _ in range(self.cli_width)] for _ in range(self.cli_height)]
                 self.screen_buffer = [[(" ", DEFAULT_STYLE) for _ in range(self.cli_width)] for _ in range(self.cli_height)]
                 self.screen_dump = [[("A", DEFAULT_STYLE) for _ in range(self.cli_width)] for _ in range(self.cli_height)]
-                
+
                 self.image_space = [[None for _ in range(self.cli_width)] for _ in range(self.cli_height)]
                 self.binmap_space = [[None for _ in range(self.cli_width)] for _ in range(self.cli_height)]
                 self.dirty_cells.clear()
                 self.screen_diff = []
-                
+
                 clear_screen()
             self.size_dump = size
+        self._resize_pending = False
 
     def clear_prepare(self):
         for y in range(self.cli_height):

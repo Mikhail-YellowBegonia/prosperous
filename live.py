@@ -15,6 +15,7 @@ class Live:
         self._render_thread: threading.Thread = None
         self._input_thread: threading.Thread = None
         self._last_poll: float = 0.0
+        self._scene: list = []
 
     def __enter__(self):
         self.engine = RenderEngine()
@@ -50,13 +51,20 @@ class Live:
             self.engine.input_events.clear()
         return events
 
+    def add(self, component) -> None:
+        """注册顶层组件到场景，frame() 时自动绘制。运行时增删均可直接操作 live._scene。"""
+        if component not in self._scene:
+            self._scene.append(component)
+
     @contextlib.contextmanager
     def frame(self):
-        """帧绘制上下文：自动清空准备缓冲区，退出时合并合成层。持锁期间渲染线程等待交换。"""
+        """帧绘制上下文：清空缓冲区 → 绘制场景组件 → yield 供手动补充绘制 → 合并合成层。"""
         with self.engine.lock:
             self.engine.clear_prepare()
             self.engine.clear_spaces()
             try:
+                for component in self._scene:
+                    component.draw(self.engine)
                 yield self.engine
             finally:
                 self.engine.flush_spaces()
