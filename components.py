@@ -1,15 +1,15 @@
 from styles import Style, DEFAULT_STYLE
-from typing import List, Optional
-from utils import debug_log
+from typing import Callable, List, Optional, Union
+from utils import debug_log, get_visual_width
 
 class BaseComponent:
     def __init__(self, pos: tuple = (0, 0), style: Optional[Style] = None, layer: int = 0, focusable: bool = False):
-        # 鲁棒性：校验 pos 合法性，不合法则强制归位至 (1, 1)
-        if not isinstance(pos, tuple) or len(pos) != 2 or not all(isinstance(i, int) for i in pos):
-            debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, resetting to (1, 1)")
+        # 鲁棒性：允许负数坐标和列表输入，仅对完全无法解析的输入进行兜底
+        try:
+            self.pos = (int(pos[0]), int(pos[1]))
+        except (TypeError, IndexError, ValueError):
+            debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, defaulting to (0, 0)")
             self.pos = (1, 1)
-        else:
-            self.pos = pos
             
         self.style = style or Style()
         self.layer = layer
@@ -76,16 +76,16 @@ class InputBox(BaseComponent):
         self._last_blink = 0
 
     def handle_input(self, key):
+        from input_handler import InputHandler
         try:
             if key == "BACKSPACE":
                 self.text = self.text[:-1]
             elif key == "SPACE":
                 self.text += " "
             elif len(key) >= 1: 
-                # 支持多字符 (针对 IME 最终输出的完整字符)
-                # 排除我们定义的特殊控制键名（全大写）
-                if not (key.isupper() and len(key) > 1):
-                    # 限制长度 (考虑宽字符占位，这里简单按字符数算，后续可优化)
+                # Whitelist based filtering
+                if key not in InputHandler.CONTROL_KEYS and not key.startswith("SEQ("):
+                    # 限制长度 (考虑宽字符占位，目前简单截断)
                     if len(self.text) < self.width - 4:
                         self.text += key
         except Exception as e:
@@ -95,6 +95,7 @@ class InputBox(BaseComponent):
         self.text = "" 
 
     def draw(self, engine):
+        from utils import get_visual_width
         import time
         try:
             if self.is_focused and time.time() - self._last_blink > 0.5:
@@ -114,8 +115,29 @@ class InputBox(BaseComponent):
             label_txt = f" {self.label} "
             top = "┌" + label_txt.center(w - 2, "─") + "┐"
             
-            display_text = self.text + cursor
-            content = display_text.ljust(w - 2)[:w - 2]
+            # 使用 get_visual_width 计算内容的视觉长度
+            # 注意：这里需要确保总宽度 w - 2 保持一致
+            # 我们根据视觉宽度进行填充，而不是字符个数
+            content_text = self.text + cursor
+            inner_w = w - 2
+
+            content_width = get_visual_width(content_text)
+            if content_width > inner_w:
+                # 按视觉宽度截断，为省略号留出 1 列
+                budget = inner_w - 1
+                acc, cut = 0, 0
+                for i, ch in enumerate(content_text):
+                    cw = get_visual_width(ch)
+                    if acc + cw > budget:
+                        cut = i
+                        break
+                    acc += cw
+                else:
+                    cut = len(content_text)
+                content = content_text[:cut] + "…" + " " * (inner_w - acc - 1)
+            else:
+                content = content_text + " " * (inner_w - content_width)
+            
             mid = "│" + content + "│"
             bot = "└" + "─" * (w - 2) + "┘"
 
@@ -146,10 +168,24 @@ class Panel(BaseComponent):
             for i in range(1, self.height - 1):
                 mid = "│" + " " * (self.width - 2) + "│"
                 engine.push(ay + i, ax, mid, eff_style)
-                
+
             bot = "└" + "─" * (self.width - 2) + "┘"
             engine.push(ay + self.height - 1, ax, bot, eff_style)
-            
+
             super().draw(engine)
         except Exception as e:
             debug_log(f"[Panel] Draw failed: {e}")
+
+class Text(BaseComponent):
+    def __init__(self, pos=(0, 0), text: Union[str, Callable[[], str]] = "", style=None):
+        super().__init__(pos=pos, style=style)
+        self._text = text
+
+    def draw(self, engine):
+        try:
+            content = self._text() if callable(self._text) else self._text
+            ay, ax = self.get_absolute_pos()
+            engine.push(ay, ax, content, self.get_effective_style())
+            super().draw(engine)
+        except Exception as e:
+            debug_log(f"[Text] Draw failed: {e}")

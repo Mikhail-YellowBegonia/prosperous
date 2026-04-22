@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import threading
+import signal
 from utils import ansilookup, clear_screen, debug_log
 
 from styles import Style, DEFAULT_STYLE
@@ -34,7 +35,16 @@ class RenderEngine:
         self.last_cursor_pos = (-1, -1)
         self.size_dump = (0, 0)
         
+        # Register signal for resizing
+        try:
+            signal.signal(signal.SIGWINCH, lambda signum, frame: self.listen_size())
+        except AttributeError:
+            pass
+            
         self.listen_size()
+        # 全局隐藏硬件光标
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
 
     def listen_size(self):
         try:
@@ -74,14 +84,12 @@ class RenderEngine:
 
     def push(self, y, x, content, style=None):
         if style is None: style = DEFAULT_STYLE
-        if not self.screen_prepare: return
-        if y < 0 or y >= len(self.screen_prepare): return
+        if not self.screen_prepare or y < 0 or y >= len(self.screen_prepare): return
         
         limit_x = len(self.screen_prepare[0])
         curr_x = x
         for char in content:
             if curr_x < 0 or curr_x >= limit_x: break
-            # 宽字符处理
             width = 2 if ord(char) > 128 and not (0x2500 <= ord(char) <= 0x259F) else 1
             self.screen_prepare[y][curr_x] = (char, style)
             if width == 2:
@@ -95,7 +103,6 @@ class RenderEngine:
         if not self.image_space: return
         if y < 0 or y >= len(self.image_space) or x < 0 or x >= len(self.image_space[0]):
             return
-        # ... (后续逻辑保持，已包含安全检查)
         if self.image_space[y][x] is None:
             self.image_space[y][x] = [None, None]
         if char == "▀":
@@ -111,7 +118,6 @@ class RenderEngine:
         if not self.binmap_space: return
         if y < 0 or y >= len(self.binmap_space) or x < 0 or x >= len(self.binmap_space[0]):
             return
-        # ... (保持检查)
         bits = self.QUAD_TO_BITS.get(char, 0)
         if bits == 0: return
         if self.binmap_space[y][x] is None:
@@ -156,10 +162,13 @@ class RenderEngine:
 
     def render(self):
         self.find_diff()
+        if not self.screen_diff: return
+        
         for y, x, char, style in self.screen_diff:
             if y != self.last_cursor_pos[0] or x != self.last_cursor_pos[1] + 1:
                 sys.stdout.write(f"\033[{y + 1};{x + 1}H")
             sys.stdout.write(f"{ansilookup(style)}{char}")
             self.last_cursor_pos = (y, x)
+            
         sys.stdout.flush()
         self.screen_dump = [row[:] for row in self.screen_buffer]

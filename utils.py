@@ -1,6 +1,16 @@
 import sys
 import os
 
+def get_visual_width(text):
+    import unicodedata
+    width = 0
+    for char in text:
+        if unicodedata.east_asian_width(char) in ('W', 'F'):
+            width += 2
+        else:
+            width += 1
+    return width
+
 def ansilookup(style_obj):
     if style_obj is None:
         return ""
@@ -37,9 +47,9 @@ def ansilookup(style_obj):
             parts.append(f"48;2;{bg[0]};{bg[1]};{bg[2]}")
 
     if not parts:
-        return ""
+        return "\033[0m"
     
-    return "\033[" + ";".join(parts) + "m"
+    return "\033[0m\033[" + ";".join(parts) + "m"
 
 def clear_screen():
     sys.stdout.write("\033[3J\033[2J\033[H")
