@@ -30,13 +30,36 @@ status_text = "idle"
 
 with Live(fps=30, logic_fps=60) as live:
     focus = FocusManager()
-    log   = LogView(pos=(1, 1), width=W - 2, height=5, style=Style(fg=250))
+
+    log = LogView(pos=(1, 1), width=W - 2, height=5, style=Style(fg=250))
     log.append("[SYSTEM] Prosperous Monitor started.")
 
-    cmd_box    = InputBox(pos=(1, 1),  width=34, label="COMMAND")
-    btn_submit = Button( pos=(1, 38), label="Submit", width=12)
-    txt_status = Text(   pos=(1, 52), text=lambda: f"[ {status_text} ]", style=Style(fg=82))
+    # ── 确认 Modal（初始隐藏）────────────────────────────
+    modal = Panel(
+        pos=(7, 18), width=40, height=6, title="CONFIRM", layer=10,
+        visible=False,
+        children=[
+            Text(pos=(1, 3), text="Clear all tasks? This cannot be undone."),
+            Button(pos=(3, 4),  label="YES", width=10,
+                   on_enter=lambda: confirm(True)),
+            Button(pos=(3, 18), label="NO",  width=10,
+                   on_enter=lambda: confirm(False)),
+        ]
+    )
 
+    def confirm(yes):
+        global status_text
+        if yes:
+            status_text = "cleared"
+            log.append("[ACTION] Tasks cleared.")
+        modal.visible = False
+        focus.pop_group()
+
+    def open_modal():
+        modal.visible = True
+        focus.push_group([modal.children[1], modal.children[2]])  # btn_yes, btn_no
+
+    # ── 场景声明 ─────────────────────────────────────────
     live.add(Panel(
         pos=(1, 2), width=W, height=7, title="METRICS",
         children=[
@@ -49,30 +72,46 @@ with Live(fps=30, logic_fps=60) as live:
             Text(pos=(4, 30), text="Render  30 fps",                  style=Style(fg=244)),
         ]
     ))
-    live.add(Panel(pos=(9,  2), width=W, height=7, title="LOG",     children=[log]))
-    live.add(Panel(pos=(17, 2), width=W, height=5, title="CONTROL",
-                   children=[cmd_box, btn_submit, txt_status]))
-    live.add(Text(pos=(23, 2), text="TAB/Arrows: focus  |  ENTER: submit  |  ESC: quit",
-                  style=Style(fg=238)))
+    live.add(Panel(pos=(9,  2), width=W, height=7,  title="LOG",     children=[log]))
+    live.add(Panel(
+        pos=(17, 2), width=W, height=5, title="CONTROL",
+        children=[
+            InputBox(pos=(1, 1), width=34, label="COMMAND",
+                     on_enter=lambda: submit()),
+            Button(pos=(1, 38), label="Submit", width=12,
+                   on_enter=lambda: submit()),
+            Button(pos=(1, 52), label="Clear",  width=10,
+                   style=Style(fg=196), on_enter=open_modal),
+            Text(pos=(1, 64), text=lambda: status_text, style=Style(fg=82)),
+        ]
+    ))
+    live.add(modal)
+    live.add(Text(
+        pos=(23, 2),
+        text="Arrows/TAB: focus  |  ENTER: action  |  ESC: quit",
+        style=Style(fg=238)
+    ))
 
+    # 注册主焦点组（控制面板三个可交互组件）
+    ctrl = live._scene[2]  # CONTROL panel
+    cmd_box, btn_submit, btn_clear = ctrl.children[0], ctrl.children[1], ctrl.children[2]
     focus.add_component(cmd_box)
     focus.add_component(btn_submit)
+    focus.add_component(btn_clear)
 
-    def on_submit():
+    def submit():
         global status_text
         cmd = cmd_box.text.strip()
         if cmd:
             log.append(f"[CMD] {cmd}")
-            status_text = cmd[:18]
+            status_text = cmd[:16]
         cmd_box.text = ""
 
-    cmd_box.on_enter  = on_submit
-    btn_submit.on_enter = on_submit
-
+    # ── 主循环 ────────────────────────────────────────────
     while live.running:
         for key in live.poll():
             if key == "ESC":
-                live.engine.is_running = False
+                live.stop()
                 break
             focus.handle_input(key)
 

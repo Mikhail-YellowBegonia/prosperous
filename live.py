@@ -53,6 +53,10 @@ class Live:
         self._input_handler.stop()
         cleanup(self.engine.cli_height)
 
+    def stop(self):
+        """退出主循环，触发 __exit__ 清理流程。"""
+        self.engine.is_running = False
+
     @property
     def running(self) -> bool:
         return self.engine.is_running
@@ -91,7 +95,8 @@ class Live:
             self.engine.clear_spaces()
             try:
                 for component in self._scene:
-                    component.draw(self.engine)
+                    if component.visible:
+                        component.draw(self.engine)
                 yield self.engine
             finally:
                 self.engine.flush_spaces()

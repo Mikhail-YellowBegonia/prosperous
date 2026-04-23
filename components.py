@@ -18,19 +18,27 @@ class BaseComponent:
     """
 
     def __init__(self, pos: tuple = (0, 0), style: Optional[Style] = None, layer: int = 0,
-                 focusable: bool = False, children: List['BaseComponent'] = None):
+                 focusable: bool = False, visible: bool = True,
+                 children: List['BaseComponent'] = None,
+                 on_enter=None, on_key=None, on_focus=None, on_blur=None):
         try:
             self.pos = (int(pos[0]), int(pos[1]))
         except (TypeError, IndexError, ValueError):
-            debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, defaulting to (0, 0)")
+            debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, defaulting to (1, 1)")
             self.pos = (1, 1)
 
         self.style = style or Style()
         self.layer = layer
         self.focusable = focusable
+        self.visible = visible
         self.is_focused = False
         self.parent: Optional['BaseComponent'] = None
         self.children: List['BaseComponent'] = []
+
+        if on_enter is not None: self.on_enter = on_enter
+        if on_key   is not None: self.on_key   = on_key
+        if on_focus is not None: self.on_focus = on_focus
+        if on_blur  is not None: self.on_blur  = on_blur
 
         if children:
             for child in children:
@@ -65,6 +73,14 @@ class BaseComponent:
         self.children.append(child)
         self.children.sort(key=lambda x: x.layer)
 
+    def remove_child(self, child: 'BaseComponent'):
+        """从本组件移除子组件。"""
+        try:
+            self.children.remove(child)
+            child.parent = None
+        except ValueError:
+            pass
+
     def get_absolute_pos(self) -> tuple:
         """递归计算本组件在屏幕上的绝对坐标 (row, col)。"""
         try:
@@ -87,10 +103,13 @@ class BaseComponent:
             return DEFAULT_STYLE
 
     def draw(self, engine):
-        """递归绘制所有子组件，单个子组件异常不影响其余组件。"""
+        """递归绘制所有子组件，单个子组件异常不影响其余组件。visible=False 时跳过自身及所有子组件。"""
+        if not self.visible:
+            return
         for child in self.children:
             try:
-                child.draw(engine)
+                if child.visible:
+                    child.draw(engine)
             except Exception as e:
                 debug_log(f"[BaseComponent] Child component draw failed: {e}")
 
@@ -110,13 +129,16 @@ class InputBox(BaseComponent):
         box.on_enter = lambda: submit(box.text)
     """
 
-    def __init__(self, pos=(0, 0), width=40, label="INPUT", style=None, layer=0):
-        super().__init__(pos=pos, style=style, layer=layer, focusable=True)
+    def __init__(self, pos=(0, 0), width=40, label="INPUT", style=None, layer=0,
+                 focus_style=None, on_enter=None, on_key=None):
+        super().__init__(pos=pos, style=style, layer=layer, focusable=True,
+                         on_enter=on_enter, on_key=on_key)
         self.width = width
         self.label = label
         self.text = ""
         self.cursor_visible = True
         self._last_blink = 0
+        self.focus_style = focus_style or Style(fg=220)
 
     def handle_input(self, key):
         from input_handler import InputHandler
@@ -147,7 +169,7 @@ class InputBox(BaseComponent):
 
             ay, ax = self.get_absolute_pos()
             eff_style = self.get_effective_style()
-            border_style = eff_style.merge(Style(fg=220)) if self.is_focused else eff_style
+            border_style = eff_style.merge(self.focus_style) if self.is_focused else eff_style
 
             cursor = "█" if self.cursor_visible else " "
             w = self.width
@@ -192,10 +214,13 @@ class Button(BaseComponent):
         btn.on_enter = lambda: do_something()
     """
 
-    def __init__(self, pos=(0, 0), label="BUTTON", width=None, style=None, layer=0):
-        super().__init__(pos=pos, style=style, layer=layer, focusable=True)
+    def __init__(self, pos=(0, 0), label="BUTTON", width=None, style=None, layer=0,
+                 focus_style=None, on_enter=None, on_key=None):
+        super().__init__(pos=pos, style=style, layer=layer, focusable=True,
+                         on_enter=on_enter, on_key=on_key)
         self.label = label
         self.width = width if width is not None else get_visual_width(label) + 4
+        self.focus_style = focus_style or Style(fg=220, bold=True)
 
     def draw(self, engine):
         try:
@@ -205,7 +230,7 @@ class Button(BaseComponent):
             text = self.label[:inner].center(inner)
             if self.is_focused:
                 display = f"[ {text} ]"
-                btn_style = eff_style.merge(Style(fg=220, bold=True))
+                btn_style = eff_style.merge(self.focus_style)
             else:
                 display = f"  {text}  "
                 btn_style = eff_style
@@ -224,8 +249,9 @@ class Panel(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, layer=0, children=None):
-        super().__init__(pos=pos, style=style, layer=layer, children=children)
+    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, layer=0,
+                 visible=True, children=None):
+        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
         self.width = width
         self.height = height
         self.title = title
