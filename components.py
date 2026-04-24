@@ -82,15 +82,20 @@ class BaseComponent:
             pass
 
     def get_absolute_pos(self) -> tuple:
-        """递归计算本组件在屏幕上的绝对坐标 (row, col)。"""
+        """递归计算本组件在屏幕上的绝对坐标 (row, col)。
+        子组件以父组件的 get_child_origin() 为基准，使容器可透明承担边框/padding 偏移。"""
         try:
             if self.parent:
-                py, px = self.parent.get_absolute_pos()
+                py, px = self.parent.get_child_origin()
                 return (py + self.pos[0], px + self.pos[1])
             return self.pos
         except Exception as e:
             debug_log(f"[BaseComponent] Error in coordinate resolution: {e}")
             return (1, 1)
+
+    def get_child_origin(self) -> tuple:
+        """子组件坐标的基准点，默认等于自身绝对坐标。容器类可覆盖此方法加入边框/padding 偏移。"""
+        return self.get_absolute_pos()
 
     def get_effective_style(self) -> Style:
         """递归合并祖先样式，返回本组件实际生效的样式。"""
@@ -131,6 +136,8 @@ class InputBox(BaseComponent):
 
     def __init__(self, pos=(0, 0), width=40, label="INPUT", style=None, layer=0,
                  focus_style=None, on_enter=None, on_key=None):
+        from theme import get_theme
+        t = get_theme("InputBox")
         super().__init__(pos=pos, style=style, layer=layer, focusable=True,
                          on_enter=on_enter, on_key=on_key)
         self.width = width
@@ -138,7 +145,7 @@ class InputBox(BaseComponent):
         self.text = ""
         self.cursor_visible = True
         self._last_blink = 0
-        self.focus_style = focus_style or Style(fg=220)
+        self.focus_style = focus_style if focus_style is not None else t.get("focus_style", Style(fg=220))
 
     def handle_input(self, key):
         from input_handler import InputHandler
@@ -216,11 +223,13 @@ class Button(BaseComponent):
 
     def __init__(self, pos=(0, 0), label="BUTTON", width=None, style=None, layer=0,
                  focus_style=None, on_enter=None, on_key=None):
+        from theme import get_theme
+        t = get_theme("Button")
         super().__init__(pos=pos, style=style, layer=layer, focusable=True,
                          on_enter=on_enter, on_key=on_key)
         self.label = label
         self.width = width if width is not None else get_visual_width(label) + 4
-        self.focus_style = focus_style or Style(fg=220, bold=True)
+        self.focus_style = focus_style if focus_style is not None else t.get("focus_style", Style(fg=220, bold=True))
 
     def draw(self, engine):
         try:
@@ -245,16 +254,26 @@ class Panel(BaseComponent):
 
     示例：
         panel = Panel(pos=(1, 1), width=40, height=8, title="INFO", children=[
-            Text(pos=(1, 1), text="hello"),
+            Text(pos=(0, 0), text="hello"),  # (0,0) 即内容区左上角，无需手算边框偏移
         ])
     """
 
     def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, layer=0,
-                 visible=True, children=None):
-        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
+                 padding=None, visible=True, children=None):
+        from theme import get_theme
+        t = get_theme("Panel")
+        resolved_style = style if style is not None else t.get("style")
+        super().__init__(pos=pos, style=resolved_style, layer=layer, visible=visible, children=children)
         self.width = width
         self.height = height
         self.title = title
+        self.padding = padding if padding is not None else t.get("padding", 0)
+
+    def get_child_origin(self) -> tuple:
+        """子组件以边框内壁 + padding 为原点，pos=(0,0) 即内容区左上角。"""
+        py, px = self.get_absolute_pos()
+        offset = 1 + self.padding
+        return (py + offset, px + offset)
 
     def draw(self, engine):
         try:
@@ -310,11 +329,13 @@ class ProgressBar(BaseComponent):
 
     def __init__(self, pos=(0, 0), width=20, value: Union[float, Callable[[], float]] = 0.0,
                  filled_style=None, empty_style=None, style=None, layer=0):
+        from theme import get_theme
+        t = get_theme("ProgressBar")
         super().__init__(pos=pos, style=style, layer=layer)
         self._value = value
         self.width = width
-        self.filled_style = filled_style or Style(fg=(80, 200, 120))
-        self.empty_style = empty_style or Style(fg=(60, 60, 60))
+        self.filled_style = filled_style if filled_style is not None else t.get("filled_style", Style(fg=(80, 200, 120)))
+        self.empty_style  = empty_style  if empty_style  is not None else t.get("empty_style",  Style(fg=(60, 60, 60)))
 
     def draw(self, engine):
         try:
