@@ -83,19 +83,28 @@ class BaseComponent:
 
     def get_absolute_pos(self) -> tuple:
         """递归计算本组件在屏幕上的绝对坐标 (row, col)。
-        子组件以父组件的 get_child_origin() 为基准，使容器可透明承担边框/padding 偏移。"""
+        以父组件的 get_child_origin(self) 为基准，再加上自身 pos 偏移。"""
         try:
             if self.parent:
-                py, px = self.parent.get_child_origin()
+                py, px = self.parent.get_child_origin(self)
                 return (py + self.pos[0], px + self.pos[1])
             return self.pos
         except Exception as e:
             debug_log(f"[BaseComponent] Error in coordinate resolution: {e}")
             return (1, 1)
 
-    def get_child_origin(self) -> tuple:
-        """子组件坐标的基准点，默认等于自身绝对坐标。容器类可覆盖此方法加入边框/padding 偏移。"""
+    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+        """返回指定子组件的坐标基准（绝对坐标）。
+        默认等于自身绝对坐标；Panel 加入边框+padding；VStack/HStack 按子组件顺序累积偏移。"""
         return self.get_absolute_pos()
+
+    def get_height(self) -> int:
+        """返回本组件的视觉行高，供布局容器计算子组件位置使用。"""
+        return 1
+
+    def get_width(self) -> int:
+        """返回本组件的视觉列宽，供布局容器计算子组件位置使用。"""
+        return 1
 
     def get_effective_style(self) -> Style:
         """递归合并祖先样式，返回本组件实际生效的样式。"""
@@ -143,6 +152,9 @@ class InputBox(BaseComponent):
         self.width = width
         self.label = label
         self.text = ""
+
+    def get_height(self) -> int: return 3
+    def get_width(self)  -> int: return self.width
         self.cursor_visible = True
         self._last_blink = 0
         self.focus_style = focus_style if focus_style is not None else t.get("focus_style", Style(fg=220))
@@ -231,6 +243,9 @@ class Button(BaseComponent):
         self.width = width if width is not None else get_visual_width(label) + 4
         self.focus_style = focus_style if focus_style is not None else t.get("focus_style", Style(fg=220, bold=True))
 
+    def get_height(self) -> int: return 1
+    def get_width(self)  -> int: return self.width
+
     def draw(self, engine):
         try:
             ay, ax = self.get_absolute_pos()
@@ -269,7 +284,10 @@ class Panel(BaseComponent):
         self.title = title
         self.padding = padding if padding is not None else t.get("padding", 0)
 
-    def get_child_origin(self) -> tuple:
+    def get_height(self) -> int: return self.height
+    def get_width(self)  -> int: return self.width
+
+    def get_child_origin(self, child: 'BaseComponent') -> tuple:
         """子组件以边框内壁 + padding 为原点，pos=(0,0) 即内容区左上角。"""
         py, px = self.get_absolute_pos()
         offset = 1 + self.padding
@@ -337,6 +355,9 @@ class ProgressBar(BaseComponent):
         self.filled_style = filled_style if filled_style is not None else t.get("filled_style", Style(fg=(80, 200, 120)))
         self.empty_style  = empty_style  if empty_style  is not None else t.get("empty_style",  Style(fg=(60, 60, 60)))
 
+    def get_height(self) -> int: return 1
+    def get_width(self)  -> int: return self.width
+
     def draw(self, engine):
         try:
             v = max(0.0, min(1.0, self._value() if callable(self._value) else self._value))
@@ -371,6 +392,9 @@ class LogView(BaseComponent):
         self.height = height
         self._lines: List[str] = []
 
+    def get_height(self) -> int: return self.height
+    def get_width(self)  -> int: return self.width
+
     def append(self, msg: str):
         self._lines.append(msg)
         if len(self._lines) > self.height:
@@ -397,3 +421,72 @@ class LogView(BaseComponent):
             super().draw(engine)
         except Exception as e:
             debug_log(f"[LogView] Draw failed: {e}")
+
+
+class VStack(BaseComponent):
+    """纵向堆叠容器。子组件按声明顺序从上到下排列，无需手写 pos。
+    子组件的 pos 仍会叠加，可用于微调单个组件的位置。
+
+    参数：
+        gap: 子组件之间的行间距，默认 0。
+
+    示例：
+        VStack(pos=(1, 2), gap=1, children=[
+            Text(text="标题"),
+            InputBox(width=30, label="输入"),
+            Button(label="提交"),
+        ])
+    """
+
+    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0,
+                 visible=True, children=None):
+        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
+        self.gap = gap
+
+    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+        py, px = self.get_absolute_pos()
+        idx = self.children.index(child)
+        row = sum(c.get_height() + self.gap for c in self.children[:idx])
+        return (py + row, px)
+
+    def get_height(self) -> int:
+        if not self.children:
+            return 0
+        return sum(c.get_height() for c in self.children) + self.gap * max(0, len(self.children) - 1)
+
+    def get_width(self) -> int:
+        return max((c.get_width() for c in self.children), default=0)
+
+
+class HStack(BaseComponent):
+    """横向堆叠容器。子组件按声明顺序从左到右排列，无需手写 pos。
+    子组件的 pos 仍会叠加，可用于微调单个组件的位置。
+
+    参数：
+        gap: 子组件之间的列间距，默认 0。
+
+    示例：
+        HStack(pos=(1, 2), gap=2, children=[
+            Button(label="确认", width=10),
+            Button(label="取消", width=10),
+        ])
+    """
+
+    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0,
+                 visible=True, children=None):
+        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
+        self.gap = gap
+
+    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+        py, px = self.get_absolute_pos()
+        idx = self.children.index(child)
+        col = sum(c.get_width() + self.gap for c in self.children[:idx])
+        return (py, px + col)
+
+    def get_height(self) -> int:
+        return max((c.get_height() for c in self.children), default=0)
+
+    def get_width(self) -> int:
+        if not self.children:
+            return 0
+        return sum(c.get_width() for c in self.children) + self.gap * max(0, len(self.children) - 1)

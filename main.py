@@ -1,7 +1,7 @@
 import time
 import random
 from live import Live
-from components import Panel, InputBox, Button, Text, ProgressBar, LogView
+from components import Panel, InputBox, Button, Text, ProgressBar, LogView, VStack, HStack
 from interaction import FocusManager
 from styles import Style
 
@@ -25,15 +25,16 @@ def uptime_str():
     return f"{s // 3600:02}:{(s % 3600) // 60:02}:{s % 60:02}"
 
 # ── App ───────────────────────────────────────────────────
-# Theme 默认 padding=1，子组件 pos=(0,0) 即内容区左上角
 W = 76
 status_text = "idle"
 
 with Live(fps=30, logic_fps=60) as live:
     focus = FocusManager()
 
-    log = LogView(pos=(0, 0), width=W - 4, height=5, style=Style(fg=250))
+    log = LogView(width=W - 4, height=5, style=Style(fg=250))
     log.append("[SYSTEM] Prosperous Monitor started.")
+
+    cmd_box = InputBox(width=34, label="COMMAND", on_enter=lambda: submit())
 
     # ── Modal（初始隐藏）────────────────────────────────
     modal = Panel(
@@ -41,8 +42,10 @@ with Live(fps=30, logic_fps=60) as live:
         visible=False,
         children=[
             Text(pos=(0, 1), text="Clear all tasks? This cannot be undone."),
-            Button(pos=(2, 2),  label="YES", width=10, on_enter=lambda: confirm(True)),
-            Button(pos=(2, 16), label="NO",  width=10, on_enter=lambda: confirm(False)),
+            HStack(pos=(2, 2), gap=4, children=[
+                Button(label="YES", width=10, on_enter=lambda: confirm(True)),
+                Button(label="NO",  width=10, on_enter=lambda: confirm(False)),
+            ]),
         ]
     )
 
@@ -56,33 +59,41 @@ with Live(fps=30, logic_fps=60) as live:
 
     def open_modal():
         modal.visible = True
-        focus.push_group([modal.children[1], modal.children[2]])
-
-    cmd_box = InputBox(pos=(0, 0), width=34, label="COMMAND",
-                       on_enter=lambda: submit())
+        btn_yes, btn_no = modal.children[1].children
+        focus.push_group([btn_yes, btn_no])
 
     # ── 场景声明 ─────────────────────────────────────────
     live.add(Panel(
         pos=(1, 2), width=W, height=7, title="METRICS",
         children=[
-            Text(pos=(0, 0), text="CPU  ", style=Style(fg=244)),
-            ProgressBar(pos=(0, 5), width=28, value=next_cpu),
-            Text(pos=(1, 0), text="MEM  ", style=Style(fg=244)),
-            ProgressBar(pos=(1, 5), width=28, value=next_mem,
-                        filled_style=Style(fg=(100, 160, 240))),
-            Text(pos=(3, 0), text=lambda: f"Uptime  {uptime_str()}", style=Style(fg=244)),
-            Text(pos=(3, 28), text="Render  30 fps", style=Style(fg=244)),
+            VStack(pos=(0, 0), gap=0, children=[
+                HStack(gap=2, children=[
+                    Text(text="CPU  ", style=Style(fg=244)),
+                    ProgressBar(width=28, value=next_cpu),
+                ]),
+                HStack(gap=2, children=[
+                    Text(text="MEM  ", style=Style(fg=244)),
+                    ProgressBar(width=28, value=next_mem,
+                                filled_style=Style(fg=(100, 160, 240))),
+                ]),
+            ]),
+            HStack(pos=(3, 0), gap=4, children=[
+                Text(text=lambda: f"Uptime  {uptime_str()}", style=Style(fg=244)),
+                Text(text="Render  30 fps", style=Style(fg=244)),
+            ]),
         ]
     ))
-    live.add(Panel(pos=(9,  2), width=W, height=7, title="LOG", children=[log]))
+    live.add(Panel(pos=(9,  2), width=W, height=7,  title="LOG",     children=[log]))
     live.add(Panel(
         pos=(17, 2), width=W, height=5, title="CONTROL",
         children=[
-            cmd_box,
-            Button(pos=(0, 36), label="Submit", width=12, on_enter=lambda: submit()),
-            Button(pos=(0, 50), label="Clear",  width=10,
-                   style=Style(fg=196), on_enter=open_modal),
-            Text(pos=(0, 62), text=lambda: status_text, style=Style(fg=82)),
+            HStack(gap=2, children=[
+                cmd_box,
+                Button(label="Submit", width=12, on_enter=lambda: submit()),
+                Button(label="Clear",  width=10,
+                       style=Style(fg=196), on_enter=open_modal),
+                Text(text=lambda: status_text, style=Style(fg=82)),
+            ]),
         ]
     ))
     live.add(modal)
@@ -92,9 +103,11 @@ with Live(fps=30, logic_fps=60) as live:
         style=Style(fg=238)
     ))
 
-    focus.add_component(cmd_box)
-    focus.add_component(live._scene[2].children[1])  # btn_submit
-    focus.add_component(live._scene[2].children[2])  # btn_clear
+    # 主焦点组
+    ctrl_hstack = live._scene[2].children[0]
+    focus.add_component(ctrl_hstack.children[0])  # cmd_box
+    focus.add_component(ctrl_hstack.children[1])  # btn_submit
+    focus.add_component(ctrl_hstack.children[2])  # btn_clear
 
     def submit():
         global status_text
