@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, Union, Tuple
 
+
 @dataclass
 class Style:
     fg: Optional[Union[int, Tuple[int, int, int]]] = None
@@ -14,7 +15,7 @@ class Style:
     hidden: bool = False
     strike: bool = False
 
-    def merge(self, other: 'Style') -> 'Style':
+    def merge(self, other: "Style") -> "Style":
         """将另一个样式的非空属性合并到当前样式，返回新样式"""
         new_style = Style(
             fg=other.fg if other.fg is not None else self.fg,
@@ -29,6 +30,7 @@ class Style:
             strike=other.strike or self.strike,
         )
         return new_style
+
 
 # 系统默认样式
 DEFAULT_STYLE = Style(fg=15, bg=None)

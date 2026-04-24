@@ -1,49 +1,38 @@
 # Known Issues & Roadmap
 
-## 🔴 [Critical] 稳定性与正确性
+## ✅ 已修复
 
-### [engine] SIGWINCH 信号处理死锁 ✅ 已修复
-信号处理器改为只设 `_resize_pending` flag，`listen_size()` 推迟到 `poll()` 中执行，
-避免在持锁期间触发死锁。
+- **SIGWINCH 死锁**：信号处理器改为只设 flag，resize 推迟到 `poll()` 执行。
+- **焦点隔离**：`FocusManager` 内置焦点栈，`push_group()` / `pop_group()` 支持 Modal。
+- **坐标语义混乱**：`Panel` 加入 `padding` + `get_child_origin(child)`，`pos=(0,0)` 即内容区左上角。
+- **组件 visible / focus_style / remove_child / live.stop()**：均已实现。
 
 ---
 
 ## 🟡 [Near-term] 近期待做
 
-### [interaction] 焦点系统缺乏隔离机制
-- **现象**：打开 Modal 时底层组件仍可被 TAB 选中并触发，无法安全实现多层交互。
-- **方案**：`FocusManager` 内置焦点栈，`push_group([...])` 压栈隔离，`pop_group()` 自动恢复，无需用户手动 clear/add。
-- **备注**：空间导航（按方向键做坐标查找）是独立问题，依赖坐标缓存机制，暂缓。
+### [interaction] 自动焦点注册
+- **现象**：用户仍需手动 `focus.add_component(btn)`，且在 VStack/HStack 嵌套后引用路径难看（`panel.children[0].children[1]`）。
+- **方案**：`live.add()` 时递归收集 `focusable=True` 的组件，按声明顺序自动注册到默认 FocusManager；Modal 等场景仍可手动 `push_group()` 覆盖。
 
-### [layout] 绝对坐标系人体工程学差
-- **现象**：子组件 `pos` 语义不清（相对边框还是内容区？），开发者必须硬编码大量 `+1` 偏移。
-- **近期方案**：`Panel` 支持 `padding` 参数，子组件 `pos=(0,0)` 即为内容区左上角。
-- **中期方案**：`VStack` / `HStack` 容器，子组件无需写 `pos`，自动顺序排列。两者递进，`padding` 先做。
+### [layout] Text 在 HStack 中宽度不准
+- **现象**：`Text.get_width()` 返回固定值 1，lambda 内容无法静态推断宽度，导致 HStack 排列错位。
+- **方案**：`Text` 支持可选 `width` 参数作为布局宽度提示；或 HStack 内的 Text 靠用户用 `pos` 微调。
 
-### [component] 缺少 `visible` 属性
-- **现象**：隐藏组件只能靠修改坐标或从 scene 移除，前者留有渲染负担，后者重新显示时需重新注册。
-- **方案**：`BaseComponent` 添加 `visible: bool = True`，`draw()` 开头检查，为 False 时直接返回。
-
-### [api] 小型 API 完善
-- `live.stop()` 封装 `live.engine.is_running = False`，屏蔽底层细节。
-- `Panel.remove_child(child)` 补全容器 API。
-- `InputBox` 聚焦颜色硬编码为 `fg=220`，应改为 `focus_style` 参数支持自定义。
+### [layout] 组件匿名，动态引用依赖外部变量或下标
+- **现象**：嵌进声明块的组件只能靠 `panel.children[0]` 引用，脆弱且不可读。
+- **方案**：`BaseComponent` 支持可选 `id` 参数，`live.find(id)` 深度查询。
 
 ---
 
 ## 🔵 [Mid-term] 中期架构
 
-### [render] ANSI 增量渲染仍可优化
-- **现状**：样式相同的连续格子已不重复发送 ANSI 码（按 `last_style` 跳过）。
-- **剩余问题**：样式变化时仍发送完整 `\033[0m` + 重声明，未做真正的增量 diff。
-- **方案**：维护 `RenderContext` 记录各属性当前状态，仅发送变化的属性码。SSH 高延迟环境收益明显。
+### [render] ANSI 增量渲染
+- **现状**：连续同样式格子已跳过 ANSI 输出；样式变化时仍发完整 reset + 重声明。
+- **方案**：维护 `RenderContext` 记录当前终端样式状态，仅发送变化属性的最小序列。SSH 高延迟环境收益明显。
 
-### [layout] 组件匿名，动态引用依赖外部变量
-- **现象**：组件在树里没有 id/key，调试和运行时查找只能靠用户自己保留引用。
-- **方案**：`BaseComponent` 支持可选 `id` 参数，`live.find(id)` 或 `panel.find(id)` 查询。
-
-### [live] frame() 持锁时间长，渲染线程实际串行化
-- **现状**：draw 阶段持有 `engine.lock`，`swap_buffers()` 阻塞等待，多线程优势受限。
+### [live] frame() 持锁导致渲染线程串行化
+- **现状**：draw 阶段持有 `engine.lock`，`swap_buffers()` 阻塞等待。
 - **方案**：分离 prepare 写入阶段与 buffer 交换阶段，缩短主锁持有时间。待性能优化节点统一处理。
 
 ---
@@ -51,13 +40,10 @@
 ## ⚪ [Deferred] 暂缓
 
 ### [layout] 空间焦点导航
-- 按方向键时按实际坐标查找最近组件，而非线性循环。
-- 依赖坐标缓存机制（需 dirty flag），与焦点栈独立，优先级低于焦点栈。
+按方向键时按屏幕坐标查找最近组件，而非线性循环。依赖坐标缓存（dirty flag），优先级低于自动焦点注册。
 
 ### [engine] 缓冲区交换全量拷贝
-- `swap_buffers()` 用 `[:]` 全量拷贝，高分屏高频刷新下有内存压力。
-- 当前规模（80×24）可忽略，性能优化节点统一处理。
+`swap_buffers()` 全量 `[:]` 拷贝，高分屏高频刷新下有内存压力。当前规模可忽略，性能节点统一处理。
 
 ### [component] 坐标/样式递归无缓存
-- `get_absolute_pos()` 和 `get_effective_style()` 每帧递归，深树下浪费。
-- 当前树浅，性能优化节点统一处理（引入 dirty flag）。
+`get_absolute_pos()` 和 `get_effective_style()` 每帧递归。当前树浅，性能节点统一处理（引入 dirty flag）。

@@ -17,10 +17,19 @@ class BaseComponent:
         component.on_key    = lambda key: ...    # 其它按键触发，返回 False 可阻断默认行为
     """
 
-    def __init__(self, pos: tuple = (0, 0), style: Optional[Style] = None, layer: int = 0,
-                 focusable: bool = False, visible: bool = True,
-                 children: List['BaseComponent'] = None,
-                 on_enter=None, on_key=None, on_focus=None, on_blur=None):
+    def __init__(
+        self,
+        pos: tuple = (0, 0),
+        style: Optional[Style] = None,
+        layer: int = 0,
+        focusable: bool = False,
+        visible: bool = True,
+        children: List["BaseComponent"] = None,
+        on_enter=None,
+        on_key=None,
+        on_focus=None,
+        on_blur=None,
+    ):
         try:
             self.pos = (int(pos[0]), int(pos[1]))
         except (TypeError, IndexError, ValueError):
@@ -32,13 +41,17 @@ class BaseComponent:
         self.focusable = focusable
         self.visible = visible
         self.is_focused = False
-        self.parent: Optional['BaseComponent'] = None
-        self.children: List['BaseComponent'] = []
+        self.parent: Optional["BaseComponent"] = None
+        self.children: List["BaseComponent"] = []
 
-        if on_enter is not None: self.on_enter = on_enter
-        if on_key   is not None: self.on_key   = on_key
-        if on_focus is not None: self.on_focus = on_focus
-        if on_blur  is not None: self.on_blur  = on_blur
+        if on_enter is not None:
+            self.on_enter = on_enter
+        if on_key is not None:
+            self.on_key = on_key
+        if on_focus is not None:
+            self.on_focus = on_focus
+        if on_blur is not None:
+            self.on_blur = on_blur
 
         if children:
             for child in children:
@@ -64,7 +77,7 @@ class BaseComponent:
         """处理到达本组件的按键，由子类实现。"""
         pass
 
-    def add_child(self, child: 'BaseComponent'):
+    def add_child(self, child: "BaseComponent"):
         """将子组件挂载到本组件，子组件坐标将相对于本组件原点计算。"""
         if not isinstance(child, BaseComponent):
             debug_log("[BaseComponent] Error: child must be an instance of BaseComponent")
@@ -73,7 +86,7 @@ class BaseComponent:
         self.children.append(child)
         self.children.sort(key=lambda x: x.layer)
 
-    def remove_child(self, child: 'BaseComponent'):
+    def remove_child(self, child: "BaseComponent"):
         """从本组件移除子组件。"""
         try:
             self.children.remove(child)
@@ -93,7 +106,7 @@ class BaseComponent:
             debug_log(f"[BaseComponent] Error in coordinate resolution: {e}")
             return (1, 1)
 
-    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+    def get_child_origin(self, child: "BaseComponent") -> tuple:
         """返回指定子组件的坐标基准（绝对坐标）。
         默认等于自身绝对坐标；Panel 加入边框+padding；VStack/HStack 按子组件顺序累积偏移。"""
         return self.get_absolute_pos()
@@ -143,24 +156,41 @@ class InputBox(BaseComponent):
         box.on_enter = lambda: submit(box.text)
     """
 
-    def __init__(self, pos=(0, 0), width=40, label="INPUT", style=None, layer=0,
-                 focus_style=None, on_enter=None, on_key=None):
+    def __init__(
+        self,
+        pos=(0, 0),
+        width=40,
+        label="INPUT",
+        style=None,
+        layer=0,
+        focus_style=None,
+        on_enter=None,
+        on_key=None,
+    ):
         from theme import get_theme
+
         t = get_theme("InputBox")
-        super().__init__(pos=pos, style=style, layer=layer, focusable=True,
-                         on_enter=on_enter, on_key=on_key)
+        super().__init__(
+            pos=pos, style=style, layer=layer, focusable=True, on_enter=on_enter, on_key=on_key
+        )
         self.width = width
         self.label = label
         self.text = ""
-
-    def get_height(self) -> int: return 3
-    def get_width(self)  -> int: return self.width
         self.cursor_visible = True
         self._last_blink = 0
-        self.focus_style = focus_style if focus_style is not None else t.get("focus_style", Style(fg=220))
+        self.focus_style = (
+            focus_style if focus_style is not None else t.get("focus_style", Style(fg=220))
+        )
+
+    def get_height(self) -> int:
+        return 3
+
+    def get_width(self) -> int:
+        return self.width
 
     def handle_input(self, key):
         from input_handler import InputHandler
+
         try:
             if key == "BACKSPACE":
                 self.text = self.text[:-1]
@@ -178,6 +208,7 @@ class InputBox(BaseComponent):
 
     def draw(self, engine):
         import time
+
         try:
             if self.is_focused and time.time() - self._last_blink > 0.5:
                 self.cursor_visible = not self.cursor_visible
@@ -213,7 +244,7 @@ class InputBox(BaseComponent):
             else:
                 content = content_text + " " * (inner_w - content_width)
 
-            engine.push(ay,     ax, top,             border_style)
+            engine.push(ay, ax, top, border_style)
             engine.push(ay + 1, ax, "│" + content + "│", eff_style)
             engine.push(ay + 2, ax, "└" + "─" * (w - 2) + "┘", border_style)
 
@@ -233,18 +264,36 @@ class Button(BaseComponent):
         btn.on_enter = lambda: do_something()
     """
 
-    def __init__(self, pos=(0, 0), label="BUTTON", width=None, style=None, layer=0,
-                 focus_style=None, on_enter=None, on_key=None):
+    def __init__(
+        self,
+        pos=(0, 0),
+        label="BUTTON",
+        width=None,
+        style=None,
+        layer=0,
+        focus_style=None,
+        on_enter=None,
+        on_key=None,
+    ):
         from theme import get_theme
+
         t = get_theme("Button")
-        super().__init__(pos=pos, style=style, layer=layer, focusable=True,
-                         on_enter=on_enter, on_key=on_key)
+        super().__init__(
+            pos=pos, style=style, layer=layer, focusable=True, on_enter=on_enter, on_key=on_key
+        )
         self.label = label
         self.width = width if width is not None else get_visual_width(label) + 4
-        self.focus_style = focus_style if focus_style is not None else t.get("focus_style", Style(fg=220, bold=True))
+        self.focus_style = (
+            focus_style
+            if focus_style is not None
+            else t.get("focus_style", Style(fg=220, bold=True))
+        )
 
-    def get_height(self) -> int: return 1
-    def get_width(self)  -> int: return self.width
+    def get_height(self) -> int:
+        return 1
+
+    def get_width(self) -> int:
+        return self.width
 
     def draw(self, engine):
         try:
@@ -273,21 +322,37 @@ class Panel(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), width=50, height=10, title="PANEL", style=None, layer=0,
-                 padding=None, visible=True, children=None):
+    def __init__(
+        self,
+        pos=(0, 0),
+        width=50,
+        height=10,
+        title="PANEL",
+        style=None,
+        layer=0,
+        padding=None,
+        visible=True,
+        children=None,
+    ):
         from theme import get_theme
+
         t = get_theme("Panel")
         resolved_style = style if style is not None else t.get("style")
-        super().__init__(pos=pos, style=resolved_style, layer=layer, visible=visible, children=children)
+        super().__init__(
+            pos=pos, style=resolved_style, layer=layer, visible=visible, children=children
+        )
         self.width = width
         self.height = height
         self.title = title
         self.padding = padding if padding is not None else t.get("padding", 0)
 
-    def get_height(self) -> int: return self.height
-    def get_width(self)  -> int: return self.width
+    def get_height(self) -> int:
+        return self.height
 
-    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+    def get_width(self) -> int:
+        return self.width
+
+    def get_child_origin(self, child: "BaseComponent") -> tuple:
         """子组件以边框内壁 + padding 为原点，pos=(0,0) 即内容区左上角。"""
         py, px = self.get_absolute_pos()
         offset = 1 + self.padding
@@ -345,18 +410,36 @@ class ProgressBar(BaseComponent):
                     filled_style=Style(fg=(255, 100, 100)))
     """
 
-    def __init__(self, pos=(0, 0), width=20, value: Union[float, Callable[[], float]] = 0.0,
-                 filled_style=None, empty_style=None, style=None, layer=0):
+    def __init__(
+        self,
+        pos=(0, 0),
+        width=20,
+        value: Union[float, Callable[[], float]] = 0.0,
+        filled_style=None,
+        empty_style=None,
+        style=None,
+        layer=0,
+    ):
         from theme import get_theme
+
         t = get_theme("ProgressBar")
         super().__init__(pos=pos, style=style, layer=layer)
         self._value = value
         self.width = width
-        self.filled_style = filled_style if filled_style is not None else t.get("filled_style", Style(fg=(80, 200, 120)))
-        self.empty_style  = empty_style  if empty_style  is not None else t.get("empty_style",  Style(fg=(60, 60, 60)))
+        self.filled_style = (
+            filled_style
+            if filled_style is not None
+            else t.get("filled_style", Style(fg=(80, 200, 120)))
+        )
+        self.empty_style = (
+            empty_style if empty_style is not None else t.get("empty_style", Style(fg=(60, 60, 60)))
+        )
 
-    def get_height(self) -> int: return 1
-    def get_width(self)  -> int: return self.width
+    def get_height(self) -> int:
+        return 1
+
+    def get_width(self) -> int:
+        return self.width
 
     def draw(self, engine):
         try:
@@ -366,9 +449,9 @@ class ProgressBar(BaseComponent):
             filled = round(inner * v)
             empty = inner - filled
             pct = f"{round(v * 100):>3}%"
-            engine.push(ay, ax,          "█" * filled, self.filled_style)
-            engine.push(ay, ax + filled, "░" * empty,  self.empty_style)
-            engine.push(ay, ax + inner,  pct,           self.get_effective_style())
+            engine.push(ay, ax, "█" * filled, self.filled_style)
+            engine.push(ay, ax + filled, "░" * empty, self.empty_style)
+            engine.push(ay, ax + inner, pct, self.get_effective_style())
             super().draw(engine)
         except Exception as e:
             debug_log(f"[ProgressBar] Draw failed: {e}")
@@ -392,8 +475,11 @@ class LogView(BaseComponent):
         self.height = height
         self._lines: List[str] = []
 
-    def get_height(self) -> int: return self.height
-    def get_width(self)  -> int: return self.width
+    def get_height(self) -> int:
+        return self.height
+
+    def get_width(self) -> int:
+        return self.width
 
     def append(self, msg: str):
         self._lines.append(msg)
@@ -438,12 +524,11 @@ class VStack(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0,
-                 visible=True, children=None):
+    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0, visible=True, children=None):
         super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
         self.gap = gap
 
-    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+    def get_child_origin(self, child: "BaseComponent") -> tuple:
         py, px = self.get_absolute_pos()
         idx = self.children.index(child)
         row = sum(c.get_height() + self.gap for c in self.children[:idx])
@@ -452,7 +537,9 @@ class VStack(BaseComponent):
     def get_height(self) -> int:
         if not self.children:
             return 0
-        return sum(c.get_height() for c in self.children) + self.gap * max(0, len(self.children) - 1)
+        return sum(c.get_height() for c in self.children) + self.gap * max(
+            0, len(self.children) - 1
+        )
 
     def get_width(self) -> int:
         return max((c.get_width() for c in self.children), default=0)
@@ -472,12 +559,11 @@ class HStack(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0,
-                 visible=True, children=None):
+    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0, visible=True, children=None):
         super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
         self.gap = gap
 
-    def get_child_origin(self, child: 'BaseComponent') -> tuple:
+    def get_child_origin(self, child: "BaseComponent") -> tuple:
         py, px = self.get_absolute_pos()
         idx = self.children.index(child)
         col = sum(c.get_width() + self.gap for c in self.children[:idx])

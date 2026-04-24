@@ -10,19 +10,23 @@ cpu = 0.45
 mem = 0.62
 start_time = time.time()
 
+
 def next_cpu():
     global cpu
     cpu = max(0.0, min(1.0, cpu + random.uniform(-0.03, 0.03)))
     return cpu
+
 
 def next_mem():
     global mem
     mem = max(0.0, min(1.0, mem + random.uniform(-0.01, 0.01)))
     return mem
 
+
 def uptime_str():
     s = int(time.time() - start_time)
     return f"{s // 3600:02}:{(s % 3600) // 60:02}:{s % 60:02}"
+
 
 # ── App ───────────────────────────────────────────────────
 W = 76
@@ -38,15 +42,23 @@ with Live(fps=30, logic_fps=60) as live:
 
     # ── Modal（初始隐藏）────────────────────────────────
     modal = Panel(
-        pos=(7, 18), width=40, height=6, title="CONFIRM", layer=10,
+        pos=(7, 18),
+        width=40,
+        height=6,
+        title="CONFIRM",
+        layer=10,
         visible=False,
         children=[
             Text(pos=(0, 1), text="Clear all tasks? This cannot be undone."),
-            HStack(pos=(2, 2), gap=4, children=[
-                Button(label="YES", width=10, on_enter=lambda: confirm(True)),
-                Button(label="NO",  width=10, on_enter=lambda: confirm(False)),
-            ]),
-        ]
+            HStack(
+                pos=(2, 2),
+                gap=4,
+                children=[
+                    Button(label="YES", width=10, on_enter=lambda: confirm(True)),
+                    Button(label="NO", width=10, on_enter=lambda: confirm(False)),
+                ],
+            ),
+        ],
     )
 
     def confirm(yes):
@@ -63,45 +75,70 @@ with Live(fps=30, logic_fps=60) as live:
         focus.push_group([btn_yes, btn_no])
 
     # ── 场景声明 ─────────────────────────────────────────
-    live.add(Panel(
-        pos=(1, 2), width=W, height=7, title="METRICS",
-        children=[
-            VStack(pos=(0, 0), gap=0, children=[
-                HStack(gap=2, children=[
-                    Text(text="CPU  ", style=Style(fg=244)),
-                    ProgressBar(width=28, value=next_cpu),
-                ]),
-                HStack(gap=2, children=[
-                    Text(text="MEM  ", style=Style(fg=244)),
-                    ProgressBar(width=28, value=next_mem,
-                                filled_style=Style(fg=(100, 160, 240))),
-                ]),
-            ]),
-            HStack(pos=(3, 0), gap=4, children=[
-                Text(text=lambda: f"Uptime  {uptime_str()}", style=Style(fg=244)),
-                Text(text="Render  30 fps", style=Style(fg=244)),
-            ]),
-        ]
-    ))
-    live.add(Panel(pos=(9,  2), width=W, height=7,  title="LOG",     children=[log]))
-    live.add(Panel(
-        pos=(17, 2), width=W, height=5, title="CONTROL",
-        children=[
-            HStack(gap=2, children=[
-                cmd_box,
-                Button(label="Submit", width=12, on_enter=lambda: submit()),
-                Button(label="Clear",  width=10,
-                       style=Style(fg=196), on_enter=open_modal),
-                Text(text=lambda: status_text, style=Style(fg=82)),
-            ]),
-        ]
-    ))
+    live.add(
+        Panel(
+            pos=(1, 2),
+            width=W,
+            height=7,
+            title="METRICS",
+            children=[
+                VStack(
+                    pos=(0, 0),
+                    gap=0,
+                    children=[
+                        HStack(
+                            gap=2,
+                            children=[
+                                Text(text="CPU  ", style=Style(fg=244)),
+                                ProgressBar(width=28, value=next_cpu),
+                            ],
+                        ),
+                        HStack(
+                            gap=2,
+                            children=[
+                                Text(text="MEM  ", style=Style(fg=244)),
+                                ProgressBar(
+                                    width=28, value=next_mem, filled_style=Style(fg=(100, 160, 240))
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                HStack(
+                    pos=(3, 0),
+                    gap=4,
+                    children=[
+                        Text(text=lambda: f"Uptime  {uptime_str()}", style=Style(fg=244)),
+                        Text(text="Render  30 fps", style=Style(fg=244)),
+                    ],
+                ),
+            ],
+        )
+    )
+    live.add(Panel(pos=(9, 2), width=W, height=7, title="LOG", children=[log]))
+    live.add(
+        Panel(
+            pos=(17, 2),
+            width=W,
+            height=5,
+            title="CONTROL",
+            children=[
+                HStack(
+                    gap=2,
+                    children=[
+                        cmd_box,
+                        Button(label="Submit", width=12, on_enter=lambda: submit()),
+                        Button(label="Clear", width=10, style=Style(fg=196), on_enter=open_modal),
+                        Text(text=lambda: status_text, style=Style(fg=82)),
+                    ],
+                ),
+            ],
+        )
+    )
     live.add(modal)
-    live.add(Text(
-        pos=(23, 2),
-        text="Arrows: focus  |  ENTER: action  |  ESC: quit",
-        style=Style(fg=238)
-    ))
+    live.add(
+        Text(pos=(23, 2), text="Arrows: focus  |  ENTER: action  |  ESC: quit", style=Style(fg=238))
+    )
 
     # 主焦点组
     ctrl_hstack = live._scene[2].children[0]

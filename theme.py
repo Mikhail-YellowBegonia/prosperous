@@ -3,7 +3,7 @@ from styles import Style
 DEFAULT_THEME = {
     "Panel": {
         "padding": 1,
-        "style":   Style(fg=15),
+        "style": Style(fg=15),
     },
     "InputBox": {
         "focus_style": Style(fg=220),
@@ -14,7 +14,7 @@ DEFAULT_THEME = {
     "Text": {},
     "ProgressBar": {
         "filled_style": Style(fg=(80, 200, 120)),
-        "empty_style":  Style(fg=(60, 60, 60)),
+        "empty_style": Style(fg=(60, 60, 60)),
     },
     "LogView": {},
 }
