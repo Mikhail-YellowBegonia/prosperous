@@ -26,15 +26,12 @@ from styles import Style
 with Live(fps=30, logic_fps=60) as live:
     focus = FocusManager()
 
-    box = InputBox(pos=(0, 0), width=30, label="INPUT",
-                   on_enter=lambda: handle(box.text))
-    btn = Button(pos=(0, 32), label="Submit",
-                 on_enter=lambda: handle(box.text))
+    box = InputBox(pos=(0, 0), width=30, label="INPUT", on_enter=lambda: handle(box.text))
+    btn = Button(pos=(0, 32), label="Submit", on_enter=lambda: handle(box.text))
 
-    live.add(Panel(
-        pos=(1, 2), width=60, height=5, title="DEMO",
-        children=[box, btn]
-    ))
+    panel = Panel(pos=(1, 2), width=60, height=5, title="DEMO", children=[box, btn])
+
+    live.add(panel)
     focus.add_component(box)
     focus.add_component(btn)
 
@@ -59,6 +56,30 @@ set_theme({
     "Panel": {"padding": 2, "style": Style(fg=240)},
 })
 ```
+
+## 代码风格与 Formatter
+
+Prosperous 的声明式语法（`children=[...]` 嵌套）与 Black / Ruff 等 formatter 兼容，但有一个需要注意的权衡：
+
+**Formatter 的效果**：自动将内联的嵌套结构展开为多行，层级结构清晰，类似 JSON 的视觉感。
+
+**Formatter 的代价**：Python 以缩进表达层级，每套一层嵌套就多 4 格。`children=[]` 参数风格在深层嵌套时（如 Panel → VStack → HStack → 子组件）会推高缩进，代码向右漂移明显。
+
+**建议的写法**：顶层容器用命名变量声明，`live.add()` 只传引用，避免把整个组件树内联在函数调用里。
+
+```python
+# 推荐：命名变量 + 独立 add
+panel_metrics = Panel(pos=(1, 2), width=76, height=7, title="METRICS",
+    children=[...])
+
+live.add(panel_metrics)
+
+# 不推荐：内联声明，白白多 2 层缩进
+live.add(Panel(pos=(1, 2), width=76, height=7, title="METRICS",
+    children=[...]))
+```
+
+项目使用 `ruff format --line-length 100` 作为标准 formatter。
 
 ## 开发计划 (活跃中)
 - **布局辅助**：`VStack` / `HStack` 容器，子组件无需手写 `pos`。
