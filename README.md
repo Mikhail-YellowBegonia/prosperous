@@ -1,25 +1,69 @@
 # Prosperous - 终端工具箱
 
 ## 简介
-Prosperous 是一个处于早期开发阶段的终端工具箱。它的诞生深受 Rich 库的启发，并在语法习惯上尽量向其靠拢，以便让习惯于 Rich 的开发者能无缝上手。
-
-这是一个练习性质的项目，我们希望在模仿的基础上，探索一些更偏向“实时动态渲染”的可能性。
+Prosperous 是一个处于早期开发阶段的终端 UI 库。它的诞生深受 Rich 库的启发，在 API 风格上尽量向其靠拢，同时针对"动态高频刷新"场景做了专门设计，是 Rich.Live 的轻量替代方向。
 
 ## 最终预期
-我们的目标是创造一个比 Rich 更轻量、在动态高频刷新（Live Rendering）场景下性能更好的工具。Prosperous 不会引入复杂的底层滚动或文档流逻辑，它直接面向动态画布，旨在帮助开发者快速搭建高性能、交互灵敏的终端应用。
-
-## 开发计划 (活跃中)
-- **输入法支持**：目前已支持基础的中文输入，我们将继续优化多字节字符的稳定性。
-- **基础组件库**：逐步完善 Panel、Button、List 等常用 UI 元素。
-- **布局简化**：进一步优化类似 HTML 的嵌套排版语法。
-- **性能调优**：持续压低大规模差分渲染时的 CPU 占用。
+创造一个比 Rich 更轻量、在动态渲染场景下性能更好的终端 UI 工具。Prosperous 不引入复杂的文档流或滚动逻辑，直接面向帧循环画布，帮助开发者快速搭建高性能、交互灵敏的终端应用。
 
 ## 程序结构
-Prosperous 采用多线程驱动的架构，从底层到高层大致分为以下三层：
+Prosperous 采用多线程驱动的三层架构：
 
-1. **引擎层 (Engine)**：采用双缓冲机制。它会比较“准备缓冲区”与“当前屏幕”的差异，仅向终端发送发生变化的像素（ANSI 序列）。这保证了即使在 60FPS 下，数据传输量也非常小。
-2. **排版与样式层 (Component Tree)**：支持类似 HTML 的树状结构。组件之间通过相对坐标定位，子组件会自动继承父组件的颜色和属性。系统具备鲁棒性，能够自动处理坐标越界和单个组件崩溃的情况，确保应用整体稳定。
-3. **交互层 (Input & Focus)**：通过底层的字节流状态机解析按键。它可以识别复杂的转义序列（如方向键、组合键）以及多字节的 UTF-8 字符。同时，系统内置了焦点管理器，支持通过方向键在不同组件间切换。
+1. **引擎层 (Engine)**：双缓冲差分渲染。每帧仅向终端发送发生变化的格子（ANSI 序列），在 30FPS 下数据传输量极小。支持图像合成层（半块字符真彩色）和二值位图层。
+
+2. **组件层 (Component Tree)**：类 HTML 树状结构。组件通过相对坐标定位，子组件自动继承父组件样式。`Panel` 支持 `padding`，子组件 `pos=(0,0)` 即内容区左上角，无需手算边框偏移。单个组件崩溃不影响整体渲染。
+
+3. **交互层 (Input & Focus)**：字节流状态机解析按键，支持方向键、组合键及多字节 UTF-8 / CJK 输入。`FocusManager` 内置焦点栈，`push_group()` / `pop_group()` 支持 Modal 等多层焦点隔离场景。
+
+## 快速上手
+
+```python
+from live import Live
+from components import Panel, InputBox, Button, Text
+from interaction import FocusManager
+from styles import Style
+
+with Live(fps=30, logic_fps=60) as live:
+    focus = FocusManager()
+
+    box = InputBox(pos=(0, 0), width=30, label="INPUT",
+                   on_enter=lambda: handle(box.text))
+    btn = Button(pos=(0, 32), label="Submit",
+                 on_enter=lambda: handle(box.text))
+
+    live.add(Panel(
+        pos=(1, 2), width=60, height=5, title="DEMO",
+        children=[box, btn]
+    ))
+    focus.add_component(box)
+    focus.add_component(btn)
+
+    while live.running:
+        for key in live.poll():
+            if key == "ESC": live.stop()
+            focus.handle_input(key)
+        with live.frame():
+            pass
+```
+
+## Theme 系统
+
+Prosperous 内置 `DEFAULT_THEME`，定义各组件的默认样式与 padding。不传样式参数时自动生效，也可全局覆盖：
+
+```python
+from theme import set_theme, DEFAULT_THEME
+from styles import Style
+
+set_theme({
+    **DEFAULT_THEME,
+    "Panel": {"padding": 2, "style": Style(fg=240)},
+})
+```
+
+## 开发计划 (活跃中)
+- **布局辅助**：`VStack` / `HStack` 容器，子组件无需手写 `pos`。
+- **滚动支持**：`LogView` 等组件的滚动浏览功能。
+- **性能优化**：ANSI 增量渲染、坐标缓存、缓冲区指针交换。
 
 ## 邀请与致谢
 由于作者水平有限，目前的 Prosperous 肯定还存在许多幼稚的设计或潜在的 Bug。
