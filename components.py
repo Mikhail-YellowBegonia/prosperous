@@ -380,14 +380,32 @@ class Panel(BaseComponent):
 class Text(BaseComponent):
     """单行文本，支持静态字符串或每帧求值的 lambda。
 
+    参数：
+        width: 布局宽度提示（列数），供 HStack 等容器定位后续组件使用。
+               静态文本不传时自动计算；lambda 文本建议手动指定，否则宽度随内容变化。
+
     示例：
         Text(pos=(0, 0), text="固定内容")
-        Text(pos=(1, 0), text=lambda: f"计数: {counter}", style=Style(fg=46))
+        Text(text=lambda: f"状态: {state}", width=20, style=Style(fg=46))
     """
 
-    def __init__(self, pos=(0, 0), text: Union[str, Callable[[], str]] = "", style=None, layer=0):
+    def __init__(
+        self,
+        pos=(0, 0),
+        text: Union[str, Callable[[], str]] = "",
+        style=None,
+        layer=0,
+        width: int = None,
+    ):
         super().__init__(pos=pos, style=style, layer=layer)
         self._text = text
+        self._width = width
+
+    def get_width(self) -> int:
+        if self._width is not None:
+            return self._width
+        content = self._text() if callable(self._text) else self._text
+        return get_visual_width(content)
 
     def draw(self, engine):
         try:

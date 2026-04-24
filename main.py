@@ -2,7 +2,6 @@ import time
 import random
 from live import Live
 from components import Panel, InputBox, Button, Text, ProgressBar, LogView, VStack, HStack
-from interaction import FocusManager
 from styles import Style
 
 # ── 模拟数据 ──────────────────────────────────────────────
@@ -33,15 +32,13 @@ W = 76
 status_text = "idle"
 
 with Live(fps=30, logic_fps=60) as live:
-    focus = FocusManager()
-
     # ── 组件 ─────────────────────────────────────────────
     log = LogView(width=W - 4, height=5, style=Style(fg=250))
     log.append("[SYSTEM] Prosperous Monitor started.")
 
     cmd_box = InputBox(width=34, label="COMMAND", on_enter=lambda: submit())
 
-    # ── Modal（初始隐藏）────────────────────────────────
+    # ── Modal（初始隐藏，visible=False 使其子组件跳过自动焦点注册）
     modal = Panel(
         pos=(7, 18),
         width=40,
@@ -68,14 +65,14 @@ with Live(fps=30, logic_fps=60) as live:
             status_text = "cleared"
             log.append("[ACTION] Tasks cleared.")
         modal.visible = False
-        focus.pop_group()
+        live.focus.pop_group()
 
     def open_modal():
         modal.visible = True
         btn_yes, btn_no = modal.children[1].children
-        focus.push_group([btn_yes, btn_no])
+        live.focus.push_group([btn_yes, btn_no])
 
-    # ── 场景声明 ─────────────────────────────────────────
+    # ── 场景声明（live.add 自动注册 focusable 组件）────────
     panel_metrics = Panel(
         pos=(1, 2),
         width=W,
@@ -96,7 +93,9 @@ with Live(fps=30, logic_fps=60) as live:
                         children=[
                             Text(text="MEM  ", style=Style(fg=244)),
                             ProgressBar(
-                                width=28, value=next_mem, filled_style=Style(fg=(100, 160, 240))
+                                width=28,
+                                value=next_mem,
+                                filled_style=Style(fg=(100, 160, 240)),
                             ),
                         ],
                     ),
@@ -134,20 +133,16 @@ with Live(fps=30, logic_fps=60) as live:
     )
 
     hint = Text(
-        pos=(23, 2), text="Arrows: focus  |  ENTER: action  |  ESC: quit", style=Style(fg=238)
+        pos=(23, 2),
+        text="Arrows: focus  |  ENTER: action  |  ESC: quit",
+        style=Style(fg=238),
     )
 
     live.add(panel_metrics)
     live.add(panel_log)
-    live.add(panel_ctrl)
-    live.add(modal)
+    live.add(panel_ctrl)  # cmd_box, btn_submit, btn_clear 自动注册
+    live.add(modal)  # visible=False，btn_yes/btn_no 跳过
     live.add(hint)
-
-    # ── 焦点注册 ─────────────────────────────────────────
-    ctrl_hstack = panel_ctrl.children[0]
-    focus.add_component(ctrl_hstack.children[0])  # cmd_box
-    focus.add_component(ctrl_hstack.children[1])  # btn_submit
-    focus.add_component(ctrl_hstack.children[2])  # btn_clear
 
     def submit():
         global status_text
@@ -163,7 +158,7 @@ with Live(fps=30, logic_fps=60) as live:
             if key == "ESC":
                 live.stop()
                 break
-            focus.handle_input(key)
+            live.focus.handle_input(key)
 
         with live.frame():
             pass
