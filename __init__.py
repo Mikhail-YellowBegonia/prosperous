@@ -6,6 +6,7 @@ from utils import clear_screen, cleanup, debug_log
 from live import Live
 from components import (
     BaseComponent,
+    Box,
     Panel,
     InputBox,
     Button,

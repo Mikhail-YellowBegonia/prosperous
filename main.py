@@ -36,7 +36,7 @@ with Live(fps=30, logic_fps=60) as live:
     log = LogView(width=W - 4, height=5, style=Style(fg=250))
     log.append("[SYSTEM] Prosperous Monitor started.")
 
-    cmd_box = InputBox(width=34, label="COMMAND", on_enter=lambda: submit())
+    cmd_box = InputBox(pos=(-1, 0), width=34, label="COMMAND", on_enter=lambda: submit())
 
     # ── Modal（初始隐藏，visible=False 使其子组件跳过自动焦点注册）
     modal = Panel(
@@ -121,7 +121,8 @@ with Live(fps=30, logic_fps=60) as live:
         title="CONTROL",
         children=[
             HStack(
-                gap=2,
+                gap=1,
+                align="center",
                 children=[
                     cmd_box,
                     Button(label="Submit", width=12, on_enter=lambda: submit()),

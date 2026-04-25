@@ -396,10 +396,12 @@ class Text(BaseComponent):
         style=None,
         layer=0,
         width: int = None,
+        align: str = "left",
     ):
         super().__init__(pos=pos, style=style, layer=layer)
         self._text = text
         self._width = width
+        self.align = align
 
     def get_width(self) -> int:
         if self._width is not None:
@@ -410,6 +412,14 @@ class Text(BaseComponent):
     def draw(self, engine):
         try:
             content = self._text() if callable(self._text) else self._text
+            if self._width is not None and self.align != "left":
+                cw = get_visual_width(content)
+                pad = max(0, self._width - cw)
+                if self.align == "right":
+                    content = " " * pad + content
+                elif self.align == "center":
+                    left = pad // 2
+                    content = " " * left + content + " " * (pad - left)
             ay, ax = self.get_absolute_pos()
             engine.push(ay, ax, content, self.get_effective_style())
             super().draw(engine)
@@ -542,15 +552,33 @@ class VStack(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0, visible=True, children=None):
+    def __init__(
+        self,
+        pos=(0, 0),
+        gap: int = 0,
+        align: str = "left",
+        reverse: bool = False,
+        style=None,
+        layer=0,
+        visible=True,
+        children=None,
+    ):
         super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
         self.gap = gap
+        self.align = align
+        self.reverse = reverse
 
     def get_child_origin(self, child: "BaseComponent") -> tuple:
         py, px = self.get_absolute_pos()
-        idx = self.children.index(child)
-        row = sum(c.get_height() + self.gap for c in self.children[:idx])
-        return (py + row, px)
+        ordered = list(reversed(self.children)) if self.reverse else self.children
+        idx = ordered.index(child)
+        row = sum(c.get_height() + self.gap for c in ordered[:idx])
+        col_offset = 0
+        if self.align != "left":
+            max_w = max((c.get_width() for c in self.children), default=0)
+            cw = child.get_width()
+            col_offset = (max_w - cw) // 2 if self.align == "center" else (max_w - cw)
+        return (py + row, px + col_offset)
 
     def get_height(self) -> int:
         if not self.children:
@@ -577,15 +605,33 @@ class HStack(BaseComponent):
         ])
     """
 
-    def __init__(self, pos=(0, 0), gap: int = 0, style=None, layer=0, visible=True, children=None):
+    def __init__(
+        self,
+        pos=(0, 0),
+        gap: int = 0,
+        align: str = "top",
+        reverse: bool = False,
+        style=None,
+        layer=0,
+        visible=True,
+        children=None,
+    ):
         super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
         self.gap = gap
+        self.align = align
+        self.reverse = reverse
 
     def get_child_origin(self, child: "BaseComponent") -> tuple:
         py, px = self.get_absolute_pos()
-        idx = self.children.index(child)
-        col = sum(c.get_width() + self.gap for c in self.children[:idx])
-        return (py, px + col)
+        ordered = list(reversed(self.children)) if self.reverse else self.children
+        idx = ordered.index(child)
+        col = sum(c.get_width() + self.gap for c in ordered[:idx])
+        row_offset = 0
+        if self.align != "top":
+            max_h = max((c.get_height() for c in self.children), default=0)
+            ch = child.get_height()
+            row_offset = (max_h - ch) // 2 if self.align == "center" else (max_h - ch)
+        return (py + row_offset, px + col)
 
     def get_height(self) -> int:
         return max((c.get_height() for c in self.children), default=0)
@@ -594,3 +640,56 @@ class HStack(BaseComponent):
         if not self.children:
             return 0
         return sum(c.get_width() for c in self.children) + self.gap * max(0, len(self.children) - 1)
+
+
+class Box(BaseComponent):
+    """纯边框容器，无内置标题。子组件 pos=(0,0) 为内容区左上角（边框内壁）。
+
+    与 Panel 的区别：Box 不绘制标题文字，边框行是可自由绘制的区域。
+    通过将 Text 子组件放在 pos=(-1, x) 处，即可将其叠印在上边框上，实现自定义标题。
+
+    示例（自定义标题位置）：
+        box = Box(pos=(1, 2), width=40, height=6, children=[
+            Text(pos=(-1, 14), text=" MY TITLE "),   # 叠印到上边框
+            Text(pos=(0, 0),   text="内容从这里开始"),
+        ])
+    """
+
+    def __init__(
+        self,
+        pos=(0, 0),
+        width=20,
+        height=5,
+        style=None,
+        layer=0,
+        padding=0,
+        visible=True,
+        children=None,
+    ):
+        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
+        self.width = width
+        self.height = height
+        self.padding = padding
+
+    def get_height(self) -> int:
+        return self.height
+
+    def get_width(self) -> int:
+        return self.width
+
+    def get_child_origin(self, child: "BaseComponent") -> tuple:
+        py, px = self.get_absolute_pos()
+        offset = 1 + self.padding
+        return (py + offset, px + offset)
+
+    def draw(self, engine):
+        try:
+            ay, ax = self.get_absolute_pos()
+            eff = self.get_effective_style()
+            engine.push(ay, ax, "┌" + "─" * (self.width - 2) + "┐", eff)
+            for i in range(1, self.height - 1):
+                engine.push(ay + i, ax, "│" + " " * (self.width - 2) + "│", eff)
+            engine.push(ay + self.height - 1, ax, "└" + "─" * (self.width - 2) + "┘", eff)
+            super().draw(engine)
+        except Exception as e:
+            debug_log(f"[Box] Draw failed: {e}")
