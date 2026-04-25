@@ -37,6 +37,7 @@ Covers:
     - clear() defocuses all in current group
     - get_focused() returns None when no components registered
 """
+
 import sys
 import os
 import pytest
@@ -52,6 +53,7 @@ from interaction import FocusManager
 # ===========================================================================
 # Helpers
 # ===========================================================================
+
 
 class _MockComponent(BaseComponent):
     """A trackable focusable component for FocusManager tests."""
@@ -86,6 +88,7 @@ class _MockComponent(BaseComponent):
 # ===========================================================================
 # InputBox.handle_input()
 # ===========================================================================
+
 
 class TestInputBoxHandleInput:
     # width=20 → inner usable chars: width - 3 = 17 (ASCII)
@@ -171,6 +174,7 @@ class TestInputBoxHandleInput:
 # LogView.append()
 # ===========================================================================
 
+
 class TestLogViewAppend:
     def _lv(self, height=5, width=40):
         return LogView(pos=(0, 0), width=width, height=height)
@@ -224,6 +228,7 @@ class TestLogViewAppend:
 # ===========================================================================
 # FocusManager
 # ===========================================================================
+
 
 class TestFocusManagerBasic:
     def test_get_focused_returns_none_when_empty(self):

@@ -24,6 +24,7 @@ class BaseComponent:
         layer: int = 0,
         focusable: bool = False,
         visible: bool = True,
+        id: str = None,
         children: List["BaseComponent"] = None,
         on_enter=None,
         on_key=None,
@@ -40,6 +41,7 @@ class BaseComponent:
         self.layer = layer
         self.focusable = focusable
         self.visible = visible
+        self.id = id
         self.is_focused = False
         self.parent: Optional["BaseComponent"] = None
         self.children: List["BaseComponent"] = []
@@ -93,6 +95,16 @@ class BaseComponent:
             child.parent = None
         except ValueError:
             pass
+
+    def find(self, id: str) -> Optional["BaseComponent"]:
+        """在本组件的子树中深度优先查找第一个 id 匹配的组件，未找到返回 None。"""
+        if self.id == id:
+            return self
+        for child in self.children:
+            result = child.find(id)
+            if result is not None:
+                return result
+        return None
 
     def get_absolute_pos(self) -> tuple:
         """递归计算本组件在屏幕上的绝对坐标 (row, col)。

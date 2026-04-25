@@ -101,6 +101,14 @@ class Live:
         except ValueError:
             pass
 
+    def find(self, id: str):
+        """在整个场景树中深度优先查找第一个 id 匹配的组件，未找到返回 None。"""
+        for component in self._scene:
+            result = component.find(id)
+            if result is not None:
+                return result
+        return None
+
     @contextlib.contextmanager
     def frame(self):
         """帧绘制上下文：清空缓冲区 → 绘制场景组件 → yield 供手动补充绘制 → 合并合成层。"""
@@ -108,7 +116,7 @@ class Live:
             self.engine.clear_prepare()
             self.engine.clear_spaces()
             try:
-                for component in self._scene:
+                for component in sorted(self._scene, key=lambda c: c.layer):
                     if component.visible:
                         component.draw(self.engine)
                 yield self.engine

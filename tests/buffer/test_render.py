@@ -47,6 +47,7 @@ Covers:
     - empty rows are blank (spaces)
     - line exceeding width is truncated with '…'
 """
+
 import sys
 import os
 import pytest
@@ -62,6 +63,7 @@ from components import Panel, Box, Text, InputBox, ProgressBar, LogView
 # ---------------------------------------------------------------------------
 # Buffer helpers
 # ---------------------------------------------------------------------------
+
 
 def cell_char(engine, row, col):
     """Return the character stored at (row, col) in screen_prepare."""
@@ -81,6 +83,7 @@ def row_chars(engine, row, start, end):
 # ===========================================================================
 # Panel
 # ===========================================================================
+
 
 class TestPanelBuffer:
     def test_top_left_corner(self, engine):
@@ -152,6 +155,7 @@ class TestPanelBuffer:
 # Box
 # ===========================================================================
 
+
 class TestBoxBuffer:
     def test_corners(self, engine):
         box = Box(pos=(0, 0), width=8, height=4, padding=0)
@@ -179,6 +183,7 @@ class TestBoxBuffer:
 # ===========================================================================
 # Text
 # ===========================================================================
+
 
 class TestTextBuffer:
     def test_static_text_at_origin(self, engine):
@@ -230,6 +235,7 @@ class TestTextBuffer:
 # InputBox
 # ===========================================================================
 
+
 class TestInputBoxBuffer:
     def test_top_border_starts_with_corner(self, engine):
         box = InputBox(pos=(0, 0), width=20, label="NAME")
@@ -268,6 +274,7 @@ class TestInputBoxBuffer:
 
     def test_cursor_present_when_focused(self, engine):
         import time
+
         box = InputBox(pos=(0, 0), width=20, label="X")
         box.is_focused = True
         box.cursor_visible = True
@@ -287,6 +294,7 @@ class TestInputBoxBuffer:
 # ===========================================================================
 # ProgressBar
 # ===========================================================================
+
 
 class TestProgressBarBuffer:
     def test_full_bar_all_filled(self, engine):
@@ -344,6 +352,7 @@ class TestProgressBarBuffer:
 # ===========================================================================
 # LogView
 # ===========================================================================
+
 
 class TestLogViewBuffer:
     def test_single_line_at_row_zero(self, engine):

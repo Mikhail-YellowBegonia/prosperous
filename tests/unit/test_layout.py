@@ -13,6 +13,7 @@ Covers:
   - pos offset is additive on top of container origin
   - Edge cases: empty containers, single child, zero-gap
 """
+
 import sys
 import os
 import pytest
@@ -28,6 +29,7 @@ from components import BaseComponent, Panel, Box, VStack, HStack, Text, InputBox
 # Helper: minimal concrete BaseComponent (get_height/get_width overridden)
 # ---------------------------------------------------------------------------
 
+
 def make_block(pos=(0, 0), height=2, width=4):
     """Return a plain BaseComponent that reports a fixed height/width."""
     c = BaseComponent(pos=pos)
@@ -39,6 +41,7 @@ def make_block(pos=(0, 0), height=2, width=4):
 # ===========================================================================
 # 1.  BaseComponent — absolute position
 # ===========================================================================
+
 
 class TestGetAbsolutePos:
     def test_root_component_returns_own_pos(self):
@@ -77,6 +80,7 @@ class TestGetAbsolutePos:
 # ===========================================================================
 # 2.  Panel — child origin includes border + padding
 # ===========================================================================
+
 
 class TestPanelChildOrigin:
     def test_default_padding_is_1_from_theme(self):
@@ -118,6 +122,7 @@ class TestPanelChildOrigin:
 # 3.  Box — child origin includes border + padding
 # ===========================================================================
 
+
 class TestBoxChildOrigin:
     def test_padding_zero_offset_is_one(self):
         box = Box(pos=(0, 0), width=10, height=5, padding=0)
@@ -147,6 +152,7 @@ class TestBoxChildOrigin:
 # ===========================================================================
 # 4.  VStack — layout math
 # ===========================================================================
+
 
 class TestVStack:
     def test_single_child_at_top(self):
@@ -181,8 +187,8 @@ class TestVStack:
         stack.add_child(c2)
         stack.add_child(c3)
         assert c1.get_absolute_pos() == (0, 0)
-        assert c2.get_absolute_pos() == (3, 0)   # 2 + 1
-        assert c3.get_absolute_pos() == (7, 0)   # 2 + 1 + 3 + 1
+        assert c2.get_absolute_pos() == (3, 0)  # 2 + 1
+        assert c3.get_absolute_pos() == (7, 0)  # 2 + 1 + 3 + 1
 
     def test_child_pos_offset_is_additive(self):
         stack = VStack(pos=(0, 0), gap=0)
@@ -257,6 +263,7 @@ class TestVStack:
 # 5.  HStack — layout math
 # ===========================================================================
 
+
 class TestHStack:
     def test_single_child_at_left(self):
         stack = HStack(pos=(0, 0), gap=0)
@@ -290,7 +297,7 @@ class TestHStack:
         stack.add_child(c2)
         stack.add_child(c3)
         assert c1.get_absolute_pos() == (0, 0)
-        assert c2.get_absolute_pos() == (0, 6)   # 4 + 2
+        assert c2.get_absolute_pos() == (0, 6)  # 4 + 2
         assert c3.get_absolute_pos() == (0, 14)  # 4 + 2 + 6 + 2
 
     def test_child_pos_offset_additive(self):
@@ -365,6 +372,7 @@ class TestHStack:
 # 6.  InputBox and Button dimensions
 # ===========================================================================
 
+
 class TestComponentDimensions:
     def test_inputbox_get_height_is_3(self):
         box = InputBox(pos=(0, 0), width=20, label="X")
@@ -399,6 +407,7 @@ class TestComponentDimensions:
 # ===========================================================================
 # 7.  add_child / remove_child and layer ordering
 # ===========================================================================
+
 
 class TestChildManagement:
     def test_add_child_sets_parent(self):

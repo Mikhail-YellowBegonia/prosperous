@@ -36,7 +36,7 @@ with Live(fps=30, logic_fps=60) as live:
     log = LogView(width=W - 4, height=5, style=Style(fg=250))
     log.append("[SYSTEM] Prosperous Monitor started.")
 
-    cmd_box = InputBox(pos=(-1, 0), width=34, label="COMMAND", on_enter=lambda: submit())
+    cmd_box = InputBox(id="cmd", pos=(-1, 0), width=34, label="COMMAND", on_enter=lambda: submit())
 
     # ── Modal（初始隐藏，visible=False 使其子组件跳过自动焦点注册）
     modal = Panel(
@@ -115,6 +115,7 @@ with Live(fps=30, logic_fps=60) as live:
     panel_log = Panel(pos=(9, 2), width=W, height=7, title="LOG", children=[log])
 
     panel_ctrl = Panel(
+        id="ctrl",
         pos=(17, 2),
         width=W,
         height=5,
@@ -125,8 +126,14 @@ with Live(fps=30, logic_fps=60) as live:
                 align="center",
                 children=[
                     cmd_box,
-                    Button(label="Submit", width=12, on_enter=lambda: submit()),
-                    Button(label="Clear", width=10, style=Style(fg=196), on_enter=open_modal),
+                    Button(id="submit", label="Submit", width=12, on_enter=lambda: submit()),
+                    Button(
+                        id="clear",
+                        label="Clear",
+                        width=10,
+                        style=Style(fg=196),
+                        on_enter=open_modal,
+                    ),
                     Text(text=lambda: status_text, style=Style(fg=82)),
                 ],
             ),
@@ -144,6 +151,10 @@ with Live(fps=30, logic_fps=60) as live:
     live.add(panel_ctrl)  # cmd_box, btn_submit, btn_clear 自动注册
     live.add(modal)  # visible=False，btn_yes/btn_no 跳过
     live.add(hint)
+
+    # id 查询示例：等价于直接使用 cmd_box 变量
+    # assert live.find("cmd") is cmd_box
+    # assert panel_ctrl.find("submit") is not None
 
     def submit():
         global status_text

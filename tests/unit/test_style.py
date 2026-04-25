@@ -14,6 +14,7 @@ Covers:
   - ansilookup() combined fg + bg + bold
   - ansilookup() None style object → empty string
 """
+
 import sys
 import os
 import pytest
@@ -29,6 +30,7 @@ from utils import ansilookup
 # ===========================================================================
 # Style.merge()
 # ===========================================================================
+
 
 class TestStyleMerge:
     def test_fg_none_in_other_keeps_base_fg(self):
@@ -128,6 +130,7 @@ class TestStyleMerge:
 # ansilookup()
 # ===========================================================================
 
+
 class TestAnsiLookup:
     def test_none_returns_empty_string(self):
         assert ansilookup(None) == ""
@@ -221,9 +224,9 @@ class TestAnsiLookup:
 
     def test_combined_fg_bg_bold(self):
         result = ansilookup(Style(fg=15, bg=0, bold=True))
-        assert "1" in result        # bold
-        assert "97" in result       # fg=15 → bright white
-        assert "40" in result       # bg=0 → black background
+        assert "1" in result  # bold
+        assert "97" in result  # fg=15 → bright white
+        assert "40" in result  # bg=0 → black background
 
     def test_result_starts_with_reset(self):
         # Any non-trivial style must start with ESC[0m (reset) before the codes

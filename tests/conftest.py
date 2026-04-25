@@ -1,6 +1,7 @@
 """
 Shared fixtures and test infrastructure for the Prosperous test suite.
 """
+
 import sys
 import os
 import signal
@@ -15,6 +16,7 @@ if PROJECT_ROOT not in sys.path:
 # ---------------------------------------------------------------------------
 # RenderEngine factory
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def make_engine(monkeypatch):
@@ -37,6 +39,7 @@ def make_engine(monkeypatch):
         monkeypatch.setattr(signal, "signal", lambda *a, **kw: None)
 
         from engine import RenderEngine
+
         engine = RenderEngine()
         return engine
 
@@ -52,6 +55,7 @@ def engine(make_engine):
 # ---------------------------------------------------------------------------
 # Theme isolation
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def reset_theme():
