@@ -1,7 +1,7 @@
 import math
 import time
 from live import Live
-from components import BaseComponent, VStack, HStack, Text
+from components import BaseComponent, VStack, HStack, Label, Text
 from styles import Style
 from animation import Tween, ease_out
 from renderers import ImageRenderer
@@ -130,6 +130,7 @@ class SongCard(BaseComponent):
         content_style = Style(fg=255) if self.selected else Style(fg=244)
 
         # ── OPAQUE BACKGROUND ──
+        engine.clear_rect(ay, ax, self.height, self.width, style=Style(bg=None))
         engine.push(ay, ax, "╭" + "─" * (self.width - 2) + "╮", Style(fg=border_color))
         for i in range(1, 4):
             engine.push(ay + i, ax, "│" + " " * (self.width - 2) + "│", Style(fg=border_color))
@@ -208,13 +209,20 @@ def main():
         # Left Pane
         art = AlbumArt(pos=(1, 5))
 
+        # 展示新的富文本 Markup 功能
+        title_text = Text(
+            pos=(10, 5), 
+            text="<bright_white bold>PROSPEROUS</> <#hot>MUSIC PLAYER</>",
+            markup=True
+        )
+
         lyric_stack = VStack(
             pos=(15, 5),
             gap=0,
             children=[
-                Text(text="You're the light, you're the night", style=Style(fg=244)),
-                Text(text="You're the color of my blood", style=Style(fg=255, bold=True)),
-                Text(text="You're the cure, you're the pain", style=Style(fg=244)),
+                Label(text="You're the light, you're the night", style=Style(fg=244)),
+                Label(text="You're the color of my blood", style=Style(fg=255, bold=True)),
+                Label(text="You're the cure, you're the pain", style=Style(fg=244)),
             ],
         )
 
@@ -222,15 +230,16 @@ def main():
             pos=(13, 5),
             gap=4,
             children=[
-                Text(text="󰐊 PLAYING", style=Style(fg=118, bold=True)),
-                Text(text="󰕇 CYCLE", style=Style(fg=81)),
-                Text(text="󰓠 44.1kHz / 24bit", style=Style(fg=240)),
+                Label(text="󰐊 PLAYING", style=Style(fg=118, bold=True)),
+                Label(text="󰕇 CYCLE", style=Style(fg=81)),
+                Label(text="󰓠 44.1kHz / 24bit", style=Style(fg=240)),
             ],
         )
 
         vis = SpectrumVisualizer(pos=(20, 5), width=40, height=6)
 
         live.add(art)
+        live.add(title_text)
         live.add(lyric_stack)
         live.add(controls)
         live.add(vis)

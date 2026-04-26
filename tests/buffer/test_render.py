@@ -57,7 +57,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from styles import Style, DEFAULT_STYLE
-from components import Panel, Box, Text, InputBox, ProgressBar, LogView
+from components import Panel, Box, Label, InputBox, ProgressBar, LogView
 
 
 # ---------------------------------------------------------------------------
@@ -185,26 +185,26 @@ class TestBoxBuffer:
 # ===========================================================================
 
 
-class TestTextBuffer:
+class TestLabelBuffer:
     def test_static_text_at_origin(self, engine):
-        t = Text(pos=(0, 0), text="Hello")
+        t = Label(pos=(0, 0), text="Hello")
         t.draw(engine)
         assert row_chars(engine, 0, 0, 5) == "Hello"
 
     def test_static_text_at_offset(self, engine):
-        t = Text(pos=(2, 4), text="Hi")
+        t = Label(pos=(2, 4), text="Hi")
         t.draw(engine)
         assert row_chars(engine, 2, 4, 6) == "Hi"
 
     def test_lambda_text_evaluated(self, engine):
         value = ["world"]
-        t = Text(pos=(0, 0), text=lambda: value[0], width=10)
+        t = Label(pos=(0, 0), text=lambda: value[0], width=10)
         t.draw(engine)
         assert row_chars(engine, 0, 0, 5) == "world"
 
     def test_lambda_text_updates_on_redraw(self, engine):
         value = ["a"]
-        t = Text(pos=(0, 0), text=lambda: value[0], width=5)
+        t = Label(pos=(0, 0), text=lambda: value[0], width=5)
         t.draw(engine)
         assert cell_char(engine, 0, 0) == "a"
         value[0] = "b"
@@ -213,7 +213,7 @@ class TestTextBuffer:
 
     def test_right_align_pads_left(self, engine):
         # width=10, text="Hi" (len 2) → 8 spaces + "Hi"
-        t = Text(pos=(0, 0), text="Hi", width=10, align="right")
+        t = Label(pos=(0, 0), text="Hi", width=10, align="right")
         t.draw(engine)
         rendered = row_chars(engine, 0, 0, 10)
         assert rendered.endswith("Hi")
@@ -221,7 +221,7 @@ class TestTextBuffer:
 
     def test_center_align(self, engine):
         # width=10, text="Hi" (len 2) → pad=8, left=4
-        t = Text(pos=(0, 0), text="Hi", width=10, align="center")
+        t = Label(pos=(0, 0), text="Hi", width=10, align="center")
         t.draw(engine)
         rendered = row_chars(engine, 0, 0, 10)
         assert "Hi" in rendered

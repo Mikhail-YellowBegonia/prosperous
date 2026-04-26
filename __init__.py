@@ -10,6 +10,7 @@ from components import (
     Panel,
     InputBox,
     Button,
+    Label,
     Text,
     ProgressBar,
     LogView,

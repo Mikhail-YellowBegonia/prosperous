@@ -54,9 +54,11 @@ with Live(fps=30, logic_fps=60) as live:
 
 ## 功能一览
 
-**组件**：`Panel`、`Box`（无标题边框）、`VStack`、`HStack`、`Text`、`Button`、`InputBox`、`ProgressBar`、`LogView`
+**组件**：`Panel`、`Box`（自定义边框/背景）、`VStack`、`HStack`、`Label`（高性能单行）、`Text`（多行/对齐/富文本标记）、`Button`、`InputBox`、`ProgressBar`、`LogView`
 
 **布局**：`padding`、`gap`、`align`（cross-axis 对齐）、`reverse`、`layer`（绘制层级）
+
+**富文本**：支持类似 HTML 的 `<tag>内容</>` 标记（由 `markup.py` 解析），支持主题语义化标签 `<#id>`、颜色名、HEX 颜色及 ANSI 属性嵌套。
 
 **交互**：声明式回调（`on_enter`、`on_key`、`on_focus`、`on_blur`）、焦点栈（Modal 隔离）、CJK 输入
 

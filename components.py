@@ -464,16 +464,10 @@ class Panel(Box):
             debug_log(f"[Panel] Title draw failed: {e}")
 
 
-class Text(BaseComponent):
-    """单行文本，支持静态字符串或每帧求值的 lambda。
-
-    参数：
-        width: 布局宽度提示（列数），供 HStack 等容器定位后续组件使用。
-               静态文本不传时自动计算；lambda 文本建议手动指定，否则宽度随内容变化。
-
-    示例：
-        Text(pos=(0, 0), text="固定内容")
-        Text(text=lambda: f"状态: {state}", width=20, style=Style(fg=46))
+class Label(BaseComponent):
+    """单行文本标签（轻量版）。支持静态字符串或 lambda，无标记解析。
+    
+    性能友好，适用于大量简单文本显示的场景。
     """
 
     def __init__(
@@ -509,6 +503,101 @@ class Text(BaseComponent):
                     content = " " * left + content + " " * (pad - left)
             ay, ax = self.get_absolute_pos()
             engine.push(ay, ax, content, self.get_effective_style())
+            super().draw(engine)
+        except Exception as e:
+            debug_log(f"[Label] Draw failed: {e}")
+
+
+class Text(BaseComponent):
+    """富文本组件。支持多行、对齐、以及类似 HTML 的标记解析。
+    
+    语法示例: 
+        "<#highlight>重点</> 普通文本 <red bold>警告</>"
+        支持换行符 `\n` 进行强制换行。
+
+    特性：
+        - 宽度感知：正确处理 CJK 字符。
+        - 懒惰计算：仅在内容变化时重新解析。
+    """
+
+    def __init__(
+        self,
+        pos=(0, 0),
+        text: Union[str, Callable[[], str]] = "",
+        style=None,
+        layer=0,
+        width: int = None,
+        align: str = "left",
+        markup: bool = True,
+    ):
+        super().__init__(pos=pos, style=style, layer=layer)
+        self._raw_text = text
+        self._width = width
+        self.align = align
+        self.markup = markup
+        
+        # 缓存
+        self._last_input = None
+        self._line_segments = [] # List[List[Tuple[str, Style]]]
+        self._visual_lines = []   # List[int] 每行视觉宽度
+
+    def _update_cache(self):
+        content = self._raw_text() if callable(self._raw_text) else self._raw_text
+        if content == self._last_input:
+            return content
+            
+        # 内容发生变化，重新解析
+        from markup import parse_markup
+        eff_style = self.get_effective_style()
+        
+        if self.markup:
+            self._line_segments = parse_markup(content, eff_style)
+        else:
+            # 非标记模式，视为普通多行文本
+            self._line_segments = [[(line, eff_style)] for line in content.split('\n')]
+            
+        # 计算每一行的总视觉宽度
+        self._visual_lines = []
+        for line in self._line_segments:
+            w = sum(get_visual_width(txt) for txt, _ in line)
+            self._visual_lines.append(w)
+            
+        self._last_input = content
+        return content
+
+    def get_height(self) -> int:
+        self._update_cache()
+        return len(self._line_segments)
+
+    def get_width(self) -> int:
+        if self._width is not None:
+            return self._width
+        self._update_cache()
+        return max(self._visual_lines) if self._visual_lines else 0
+
+    def draw(self, engine):
+        try:
+            self._update_cache()
+            ay, ax = self.get_absolute_pos()
+            target_w = self.get_width()
+            
+            for i, line in enumerate(self._line_segments):
+                line_w = self._visual_lines[i]
+                
+                # 计算对齐偏移
+                col_offset = 0
+                if target_w > line_w:
+                    if self.align == "right":
+                        col_offset = target_w - line_w
+                    elif self.align == "center":
+                        col_offset = (target_w - line_w) // 2
+                
+                # 逐段渲染
+                curr_x = ax + col_offset
+                for txt, style in line:
+                    engine.push(ay + i, curr_x, txt, style)
+                    curr_x += get_visual_width(txt)
+                    
             super().draw(engine)
         except Exception as e:
             debug_log(f"[Text] Draw failed: {e}")
