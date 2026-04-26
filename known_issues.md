@@ -29,10 +29,8 @@
 
 ## 🔵 [Architecture] 架构待议
 
-### [animation] 缺少基础 Tween 工具类
-- **现象**：music_player.py 中 LERP 动画全部内联在主循环，缓动系数硬编码，逻辑重复。每个需要动画的属性都要重写一遍。
-- **性质**：不是"重"功能，核心是一个 ~20 行的 `Tween(start, end, duration, easing)` 类，主循环里按帧查询当前值即可。与 Prosperous 帧循环模型完全契合，不依赖 asyncio 或 reactive。
-- **方案**：见下文动画支持分析。
+### [animation] Follower（弹性跟随）暂缓实现
+- **说明**：`Tween` 已实现（animation.py）。`Follower` 是无终止时间的弹性跟随（每帧向目标靠近固定比例），适合 music_player 那种卡片位置跟随效果。暂缓，有需要时再加。
 
 ### [live] frame() 持锁导致渲染线程串行化
 - **现状**：draw 阶段持有 `engine.lock`，`swap_buffers()` 阻塞等待，多线程优势受限。

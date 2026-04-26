@@ -75,6 +75,25 @@ All components must implement `get_height()` and `get_width()` for stack layout.
 - `tests/unit/test_render_context.py` — `_RenderContext.diff()` ANSI sequence correctness
 - The `engine` fixture in `conftest.py` patches `os.get_terminal_size` and `signal.signal`; do not replace `sys.stdout` (breaks pytest's own terminal detection)
 
+## Animation
+
+`animation.py` 提供 `Tween` 和四个内置 easing 函数（`linear` / `ease_in` / `ease_out` / `ease_in_out`）。
+
+`Tween` 是一个无副作用的数值插值器，每帧通过 `.value` 查询：
+
+```python
+from animation import Tween, ease_in_out
+
+anim = Tween(start=0, end=10, duration=0.4, easing=ease_in_out)
+
+# 主循环每帧
+card.pos = (round(anim.value), x)
+if anim.done:
+    card.pos = (10, x)   # snap 到终值
+```
+
+easing 函数签名：`(t: float) -> float`，`t ∈ [0, 1]`，可传入任意符合此签名的函数。
+
 ## Key design constraints
 
 - **No external dependencies** except Pillow (image rendering only)
