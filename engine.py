@@ -3,9 +3,110 @@ import sys
 import time
 import threading
 import signal
-from utils import ansilookup, clear_screen, debug_log
+from utils import clear_screen, debug_log
 
 from styles import Style, DEFAULT_STYLE
+
+
+class _RenderContext:
+    """终端样式状态追踪器，用于计算最小 ANSI 增量序列。"""
+
+    __slots__ = (
+        "fg",
+        "bg",
+        "bold",
+        "dim",
+        "italic",
+        "underline",
+        "blink",
+        "reverse",
+        "hidden",
+        "strike",
+    )
+
+    _ATTRS = ("bold", "dim", "italic", "underline", "blink", "reverse", "hidden", "strike")
+    _ON = {
+        "bold": "1",
+        "dim": "2",
+        "italic": "3",
+        "underline": "4",
+        "blink": "5",
+        "reverse": "7",
+        "hidden": "8",
+        "strike": "9",
+    }
+    _OFF = {
+        "italic": "23",
+        "underline": "24",
+        "blink": "25",
+        "reverse": "27",
+        "hidden": "28",
+        "strike": "29",
+    }
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.fg = self.bg = None
+        self.bold = self.dim = self.italic = self.underline = False
+        self.blink = self.reverse = self.hidden = self.strike = False
+
+    def diff(self, style: Style) -> str:
+        """返回从当前终端状态过渡到 style 所需的最小 ANSI 序列。无变化返回空字符串。"""
+        parts = []
+
+        # bold/dim 共用关闭码 22；任一需要关闭时发一次 22，再补回应保持开启的那个
+        bold_dim_off = (self.bold and not style.bold) or (self.dim and not style.dim)
+        if bold_dim_off:
+            parts.append("22")
+            if style.bold:
+                parts.append(self._ON["bold"])
+            if style.dim:
+                parts.append(self._ON["dim"])
+
+        # 其余布尔属性
+        for a in ("italic", "underline", "blink", "reverse", "hidden", "strike"):
+            was, want = getattr(self, a), getattr(style, a)
+            if was and not want:
+                parts.append(self._OFF[a])
+            elif not was and want:
+                parts.append(self._ON[a])
+
+        # bold/dim 开启（尚未被上面 bold_dim_off 分支处理的情况）
+        if not bold_dim_off:
+            if not self.bold and style.bold:
+                parts.append(self._ON["bold"])
+            if not self.dim and style.dim:
+                parts.append(self._ON["dim"])
+
+        # fg
+        if style.fg != self.fg:
+            parts.append(self._color_seq(style.fg, fg=True))
+
+        # bg
+        if style.bg != self.bg:
+            parts.append(self._color_seq(style.bg, fg=False))
+
+        # 更新状态
+        self.fg, self.bg = style.fg, style.bg
+        for a in self._ATTRS:
+            setattr(self, a, getattr(style, a))
+
+        return ("\033[" + ";".join(parts) + "m") if parts else ""
+
+    @staticmethod
+    def _color_seq(color, fg: bool) -> str:
+        base_fg, base_bg, bright_fg, bright_bg = 30, 40, 90, 100
+        if color is None:
+            return "39" if fg else "49"
+        if isinstance(color, int):
+            if color < 8:
+                return str((base_fg if fg else base_bg) + color)
+            if color < 16:
+                return str((bright_fg if fg else bright_bg) + (color - 8))
+            return f"{'38' if fg else '48'};5;{color}"
+        return f"{'38' if fg else '48'};2;{color[0]};{color[1]};{color[2]}"
 
 
 class RenderEngine:
@@ -36,6 +137,7 @@ class RenderEngine:
         self.last_cursor_pos = (-1, -1)
         self.size_dump = (0, 0)
         self._resize_pending = False
+        self._render_ctx = _RenderContext()
 
         # SIGWINCH 只设 flag，实际 resize 在 poll() 调用 listen_size() 时执行，避免持锁期间死锁
         try:
@@ -86,13 +188,14 @@ class RenderEngine:
                 self.screen_diff = []
 
                 clear_screen()
+                self._render_ctx.reset()
             self.size_dump = size
         self._resize_pending = False
 
     def clear_prepare(self):
+        blank = (" ", DEFAULT_STYLE)
         for y in range(self.cli_height):
-            for x in range(self.cli_width):
-                self.screen_prepare[y][x] = (" ", DEFAULT_STYLE)
+            self.screen_prepare[y] = [blank] * self.cli_width
 
     def clear_spaces(self):
         for y, x in self.dirty_cells:
@@ -182,8 +285,7 @@ class RenderEngine:
 
     def swap_buffers(self):
         with self.lock:
-            for y in range(self.cli_height):
-                self.screen_buffer[y] = self.screen_prepare[y][:]
+            self.screen_prepare, self.screen_buffer = self.screen_buffer, self.screen_prepare
 
     def find_diff(self):
         self.screen_diff.clear()
@@ -198,13 +300,13 @@ class RenderEngine:
         if not self.screen_diff:
             return
 
-        last_style = None
+        ctx = self._render_ctx
         for y, x, char, style in self.screen_diff:
             if y != self.last_cursor_pos[0] or x != self.last_cursor_pos[1] + 1:
                 sys.stdout.write(f"\033[{y + 1};{x + 1}H")
-            if style != last_style:
-                sys.stdout.write(ansilookup(style))
-                last_style = style
+            ansi = ctx.diff(style)
+            if ansi:
+                sys.stdout.write(ansi)
             sys.stdout.write(char)
             self.last_cursor_pos = (y, x)
 
