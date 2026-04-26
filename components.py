@@ -6,7 +6,12 @@ from utils import debug_log, get_visual_width
 class BaseComponent:
     """所有组件的基类。
 
-    坐标系说明：pos=(row, col)，均从 0 开始，子组件坐标相对于父组件原点（含边框）。
+    坐标系说明：
+        - pos=(row, col)，均从 0 开始。
+        - 顶层组件：若组件没有父组件（直接通过 live.add() 添加），则 pos 为屏幕绝对坐标。
+        - 子组件：pos 相对于父组件的内容原点。例如 Panel 内的子组件 (0,0) 对应边框内部的第一格。
+        - 自动布局：VStack/HStack 等容器会根据子组件顺序自动计算其有效原点，通常忽略子组件自身的 pos。
+
     样式继承：子组件未指定的样式属性自动继承父组件。
     层级排序：layer 值越大越后绘制（越靠上层）。
 
@@ -325,13 +330,83 @@ class Button(BaseComponent):
             debug_log(f"[Button] Draw failed: {e}")
 
 
-class Panel(BaseComponent):
-    """带标题边框的容器，子组件坐标相对于 Panel 左上角（含边框字符）。
+class Box(BaseComponent):
+    """矩形容器基类，支持自定义边框样式和背景填充。
+    子组件 pos=(0,0) 为内容区左上角（边框内壁 + padding）。
+
+    参数：
+        border_style: 8个字符的字符串，索引对应关系为：
+                      0:TL(左上), 1:TR(右上), 2:BL(左下), 3:BR(右下)
+                      4:Top(上边), 5:Bottom(下边), 6:Left(左边), 7:Right(右边)
+                      默认为 BOX_SINGLE。
+        background_char: 填充背景的字符，默认为 " " (空格)。
+    """
+
+    def __init__(
+        self,
+        pos=(0, 0),
+        width=20,
+        height=5,
+        border_style: str = None,
+        background_char: str = " ",
+        style=None,
+        layer=0,
+        padding=0,
+        visible=True,
+        children=None,
+    ):
+        from styles import BOX_SINGLE
+
+        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
+        self.width = width
+        self.height = height
+        self.border_style = border_style or BOX_SINGLE
+        self.background_char = background_char
+        self.padding = padding
+
+    def get_height(self) -> int:
+        return self.height
+
+    def get_width(self) -> int:
+        return self.width
+
+    def get_child_origin(self, child: "BaseComponent") -> tuple:
+        py, px = self.get_absolute_pos()
+        offset = 1 + self.padding
+        return (py + offset, px + offset)
+
+    def draw(self, engine):
+        try:
+            ay, ax = self.get_absolute_pos()
+            eff = self.get_effective_style()
+            b = self.border_style
+
+            # 1. 快速清理并填充背景
+            engine.clear_rect(ay, ax, self.height, self.width, style=eff)
+            if self.background_char != " ":
+                for i in range(1, self.height - 1):
+                    engine.push(ay + i, ax + 1, self.background_char * (self.width - 2), eff)
+
+            # 2. 绘制边框 (TL, TR, BL, BR, T, B, L, R)
+            # Top & Bottom
+            engine.push(ay, ax, b[0] + b[4] * (self.width - 2) + b[1], eff)
+            engine.push(ay + self.height - 1, ax, b[2] + b[5] * (self.width - 2) + b[3], eff)
+            # Left & Right
+            for i in range(1, self.height - 1):
+                engine.push(ay + i, ax, b[6], eff)
+                engine.push(ay + i, ax + self.width - 1, b[7], eff)
+
+            super().draw(engine)
+        except Exception as e:
+            debug_log(f"[{self.__class__.__name__}] Draw failed: {e}")
+
+
+class Panel(Box):
+    """带标题的 Box。
 
     示例：
-        panel = Panel(pos=(1, 1), width=40, height=8, title="INFO", children=[
-            Text(pos=(0, 0), text="hello"),  # (0,0) 即内容区左上角，无需手算边框偏移
-        ])
+        panel = Panel(pos=(1, 1), width=40, height=8, title="INFO",
+                      border_style=BOX_DOUBLE, children=[...])
     """
 
     def __init__(
@@ -340,6 +415,8 @@ class Panel(BaseComponent):
         width=50,
         height=10,
         title="PANEL",
+        border_style: str = None,
+        background_char: str = " ",
         style=None,
         layer=0,
         padding=None,
@@ -350,43 +427,41 @@ class Panel(BaseComponent):
 
         t = get_theme("Panel")
         resolved_style = style if style is not None else t.get("style")
+        res_padding = padding if padding is not None else t.get("padding", 0)
+
         super().__init__(
-            pos=pos, style=resolved_style, layer=layer, visible=visible, children=children
+
+            pos=pos,
+            width=width,
+            height=height,
+            border_style=border_style,
+            background_char=background_char,
+            style=resolved_style,
+            layer=layer,
+            padding=res_padding,
+            visible=visible,
+            children=children,
         )
-        self.width = width
-        self.height = height
         self.title = title
-        self.padding = padding if padding is not None else t.get("padding", 0)
-
-    def get_height(self) -> int:
-        return self.height
-
-    def get_width(self) -> int:
-        return self.width
-
-    def get_child_origin(self, child: "BaseComponent") -> tuple:
-        """子组件以边框内壁 + padding 为原点，pos=(0,0) 即内容区左上角。"""
-        py, px = self.get_absolute_pos()
-        offset = 1 + self.padding
-        return (py + offset, px + offset)
 
     def draw(self, engine):
+        # 先利用 Box 的逻辑绘制背景和边框
+        super().draw(engine)
+
+        # 叠印标题
         try:
             ay, ax = self.get_absolute_pos()
-            eff_style = self.get_effective_style()
+            eff = self.get_effective_style()
 
+            # 标题渲染逻辑：嵌入顶部边框
             title_txt = f" {self.title} "
-            top = "┌" + title_txt.center(self.width - 2, "─") + "┐"
-            engine.push(ay, ax, top, eff_style)
-
-            for i in range(1, self.height - 1):
-                engine.push(ay + i, ax, "│" + " " * (self.width - 2) + "│", eff_style)
-
-            engine.push(ay + self.height - 1, ax, "└" + "─" * (self.width - 2) + "┘", eff_style)
-
-            super().draw(engine)
+            title_w = get_visual_width(title_txt)
+            if title_w <= self.width - 4:
+                # 居中对齐
+                start_x = (self.width - title_w) // 2
+                engine.push(ay, ax + start_x, title_txt, eff)
         except Exception as e:
-            debug_log(f"[Panel] Draw failed: {e}")
+            debug_log(f"[Panel] Title draw failed: {e}")
 
 
 class Text(BaseComponent):
@@ -652,56 +727,3 @@ class HStack(BaseComponent):
         if not self.children:
             return 0
         return sum(c.get_width() for c in self.children) + self.gap * max(0, len(self.children) - 1)
-
-
-class Box(BaseComponent):
-    """纯边框容器，无内置标题。子组件 pos=(0,0) 为内容区左上角（边框内壁）。
-
-    与 Panel 的区别：Box 不绘制标题文字，边框行是可自由绘制的区域。
-    通过将 Text 子组件放在 pos=(-1, x) 处，即可将其叠印在上边框上，实现自定义标题。
-
-    示例（自定义标题位置）：
-        box = Box(pos=(1, 2), width=40, height=6, children=[
-            Text(pos=(-1, 14), text=" MY TITLE "),   # 叠印到上边框
-            Text(pos=(0, 0),   text="内容从这里开始"),
-        ])
-    """
-
-    def __init__(
-        self,
-        pos=(0, 0),
-        width=20,
-        height=5,
-        style=None,
-        layer=0,
-        padding=0,
-        visible=True,
-        children=None,
-    ):
-        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
-        self.width = width
-        self.height = height
-        self.padding = padding
-
-    def get_height(self) -> int:
-        return self.height
-
-    def get_width(self) -> int:
-        return self.width
-
-    def get_child_origin(self, child: "BaseComponent") -> tuple:
-        py, px = self.get_absolute_pos()
-        offset = 1 + self.padding
-        return (py + offset, px + offset)
-
-    def draw(self, engine):
-        try:
-            ay, ax = self.get_absolute_pos()
-            eff = self.get_effective_style()
-            engine.push(ay, ax, "┌" + "─" * (self.width - 2) + "┐", eff)
-            for i in range(1, self.height - 1):
-                engine.push(ay + i, ax, "│" + " " * (self.width - 2) + "│", eff)
-            engine.push(ay + self.height - 1, ax, "└" + "─" * (self.width - 2) + "┘", eff)
-            super().draw(engine)
-        except Exception as e:
-            debug_log(f"[Box] Draw failed: {e}")

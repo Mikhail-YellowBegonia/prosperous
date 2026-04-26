@@ -66,18 +66,18 @@ from components import Panel, Box, Text, InputBox, ProgressBar, LogView
 
 
 def cell_char(engine, row, col):
-    """Return the character stored at (row, col) in screen_prepare."""
-    return engine.screen_prepare[row][col][0]
+    """Return the character stored at (row, col) in screen_logic."""
+    return engine.screen_logic[row][col][0]
 
 
 def cell_style(engine, row, col):
     """Return the Style object at (row, col)."""
-    return engine.screen_prepare[row][col][1]
+    return engine.screen_logic[row][col][1]
 
 
 def row_chars(engine, row, start, end):
-    """Extract a substring from screen_prepare row [start:end]."""
-    return "".join(engine.screen_prepare[row][c][0] for c in range(start, end))
+    """Extract a substring from screen_logic row [start:end]."""
+    return "".join(engine.screen_logic[row][c][0] for c in range(start, end))
 
 
 # ===========================================================================

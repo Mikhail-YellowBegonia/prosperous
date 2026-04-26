@@ -59,24 +59,47 @@ class TestSwapBuffers:
 
 class TestClearPrepare:
     def test_clears_all_cells_to_blank(self, engine):
-        engine.screen_prepare[0][0] = ("Z", Style(fg=99))
+        engine.screen_logic[0][0] = ("Z", Style(fg=99))
         engine.clear_prepare()
-        assert engine.screen_prepare[0][0] == (" ", DEFAULT_STYLE)
+        assert engine.screen_logic[0][0] == (" ", DEFAULT_STYLE)
 
     def test_clears_entire_buffer(self, engine):
         for y in range(engine.cli_height):
             for x in range(engine.cli_width):
-                engine.screen_prepare[y][x] = ("!", Style(fg=1))
+                engine.screen_logic[y][x] = ("!", Style(fg=1))
         engine.clear_prepare()
         for y in range(engine.cli_height):
             for x in range(engine.cli_width):
-                assert engine.screen_prepare[y][x] == (" ", DEFAULT_STYLE)
+                assert engine.screen_logic[y][x] == (" ", DEFAULT_STYLE)
 
     def test_clear_after_swap_does_not_corrupt_buffer(self, engine):
         """After swap, clear_prepare must not affect screen_buffer."""
         sentinel = ("S", Style(fg=3))
-        engine.screen_prepare[0][0] = sentinel
+        engine.screen_logic[0][0] = sentinel
+        engine.commit_logic()
         engine.swap_buffers()  # sentinel now in screen_buffer
-        engine.clear_prepare()  # clears screen_prepare (formerly screen_buffer)
+        engine.clear_prepare()  # clears screen_logic
         assert engine.screen_buffer[0][0] == sentinel
-        assert engine.screen_prepare[0][0] == (" ", DEFAULT_STYLE)
+        assert engine.screen_logic[0][0] == (" ", DEFAULT_STYLE)
+
+
+# ---------------------------------------------------------------------------
+# commit_logic
+# ---------------------------------------------------------------------------
+
+
+class TestCommitLogic:
+    def test_commit_moves_logic_into_prepare(self, engine):
+        sentinel = ("C", Style(fg=4))
+        engine.screen_logic[0][0] = sentinel
+        engine.commit_logic()
+        assert engine.screen_prepare[0][0] == sentinel
+
+    def test_commit_is_pointer_exchange(self, engine):
+        id_logic_before = [id(row) for row in engine.screen_logic]
+        id_prepare_before = [id(row) for row in engine.screen_prepare]
+        engine.commit_logic()
+        id_logic_after = [id(row) for row in engine.screen_logic]
+        id_prepare_after = [id(row) for row in engine.screen_prepare]
+        assert id_prepare_after == id_logic_before
+        assert id_logic_after == id_prepare_before

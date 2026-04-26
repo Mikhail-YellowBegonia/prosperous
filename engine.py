@@ -120,9 +120,10 @@ class RenderEngine:
         self.cli_height = 24
 
         # Primary Buffers
-        self.screen_prepare = []  # Store (char, style_obj)
-        self.screen_buffer = []
-        self.screen_dump = []
+        self.screen_logic = []    # Logic 线程私有缓冲区 (无锁写入)
+        self.screen_prepare = []  # 待交换缓冲区 (持锁提交)
+        self.screen_buffer = []   # 渲染线程读取缓冲区
+        self.screen_dump = []     # 差分对比缓冲区
         self.screen_diff = []
 
         # Compositing Spaces
@@ -165,6 +166,10 @@ class RenderEngine:
                 self.cli_width = size.columns
                 self.cli_height = size.lines
 
+                self.screen_logic = [
+                    [(" ", DEFAULT_STYLE) for _ in range(self.cli_width)]
+                    for _ in range(self.cli_height)
+                ]
                 self.screen_prepare = [
                     [(" ", DEFAULT_STYLE) for _ in range(self.cli_width)]
                     for _ in range(self.cli_height)
@@ -193,9 +198,40 @@ class RenderEngine:
         self._resize_pending = False
 
     def clear_prepare(self):
+        """清空 Logic 线程私有缓冲区。"""
         blank = (" ", DEFAULT_STYLE)
         for y in range(self.cli_height):
-            self.screen_prepare[y] = [blank] * self.cli_width
+            self.screen_logic[y] = [blank] * self.cli_width
+
+    def clear_rect(self, y, x, height, width, style=None):
+        """清理屏幕指定区域。
+        
+        该操作会同时填充私有缓冲区 (screen_logic) 和重置高分辨率层 (image_space)。
+        建议组件在 draw() 开始时调用，以实现类似“层级刷新”的效果。
+        """
+        if style is None:
+            style = DEFAULT_STYLE
+        blank = (" ", style)
+
+        max_y = min(y + height, self.cli_height)
+        max_x = min(x + width, self.cli_width)
+
+        for iy in range(max(0, y), max_y):
+            start_ix = max(0, x)
+            if start_ix < max_x:
+                # 填充私有缓冲区
+                self.screen_logic[iy][start_ix:max_x] = [blank] * (max_x - start_ix)
+                # 清理高像素/位图空间（如果存在）
+                if self.image_space:
+                    for ix in range(start_ix, max_x):
+                        self.image_space[iy][ix] = None
+                        self.binmap_space[iy][ix] = None
+
+    def commit_logic(self):
+        """将 Logic 线程私有缓冲区提交到准备区。仅此处需短时间持锁。"""
+        with self.lock:
+            # 执行指针交换 (O(1))
+            self.screen_logic, self.screen_prepare = self.screen_prepare, self.screen_logic
 
     def clear_spaces(self):
         for y, x in self.dirty_cells:
@@ -205,21 +241,22 @@ class RenderEngine:
         self.dirty_cells.clear()
 
     def push(self, y, x, content, style=None):
+        """将字符串写入私有渲染缓冲区 (screen_logic)。"""
         if style is None:
             style = DEFAULT_STYLE
-        if not self.screen_prepare or y < 0 or y >= len(self.screen_prepare):
+        if not self.screen_logic or y < 0 or y >= len(self.screen_logic):
             return
 
-        limit_x = len(self.screen_prepare[0])
+        limit_x = len(self.screen_logic[0])
         curr_x = x
         for char in content:
             if curr_x < 0 or curr_x >= limit_x:
                 break
             width = 2 if ord(char) > 128 and not (0x2500 <= ord(char) <= 0x259F) else 1
-            self.screen_prepare[y][curr_x] = (char, style)
+            self.screen_logic[y][curr_x] = (char, style)
             if width == 2:
                 if curr_x + 1 < limit_x:
-                    self.screen_prepare[y][curr_x + 1] = ("", style)
+                    self.screen_logic[y][curr_x + 1] = ("", style)
                 curr_x += 2
             else:
                 curr_x += 1

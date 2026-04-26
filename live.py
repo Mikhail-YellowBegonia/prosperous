@@ -111,17 +111,21 @@ class Live:
 
     @contextlib.contextmanager
     def frame(self):
-        """帧绘制上下文：清空缓冲区 → 绘制场景组件 → yield 供手动补充绘制 → 合并合成层。"""
-        with self.engine.lock:
-            self.engine.clear_prepare()
-            self.engine.clear_spaces()
-            try:
-                for component in sorted(self._scene, key=lambda c: c.layer):
-                    if component.visible:
-                        component.draw(self.engine)
-                yield self.engine
-            finally:
-                self.engine.flush_spaces()
+        """帧绘制上下文：清空私有缓冲区 → 绘制场景组件 → yield 供手动补充绘制 → 极速提交到准备区。"""
+        # 阶段 1：在私有缓冲区绘图 (无锁)
+        self.engine.clear_prepare()
+        self.engine.clear_spaces()
+        try:
+            # 排序场景并绘制
+            for component in sorted(self._scene, key=lambda c: c.layer):
+                if component.visible:
+                    component.draw(self.engine)
+            yield self.engine
+        finally:
+            # 合并合成层 (也是在私有缓冲区)
+            self.engine.flush_spaces()
+            # 阶段 2：提交成品 (仅此处短时间持锁)
+            self.engine.commit_logic()
 
     def _render_loop(self):
         interval = 1.0 / self.fps
