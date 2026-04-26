@@ -10,8 +10,10 @@
 ## 🔵 [Architecture] 架构优化 (Architecture Improvements)
 
 - [x] **[live] 优化 `frame()` 持锁机制 (三缓冲架构)**
-- **[animation] 实现 `Follower`（弹性跟随）**：
-  - 实现无终止时间的弹性跟随算法，适合卡片跟随等交互效果。
+- **[animation] 实现 `Kinetic` (动力学/物理) 动画系统**：
+  - 核心：基于状态（位置、速度、目标）而非单纯时间的模拟。
+  - 场景：支持动画中断无缝衔接、焦点迁移时的逻辑变色与形变、模拟投影跟随等复杂交互。
+  - *注：99% 场景仍推荐使用 Tween，Kinetic 仅用于逻辑高度耦合的特殊动效。*
 
 ## ⚪ [Deferred] 暂缓事项 (Deferred)
 
@@ -22,8 +24,11 @@
 - **[engine] 区域管理**：
   - `RenderEngine` 对屏幕区域的逻辑划分。
 
-## 🧪 测试增强 (Testing)
+## 📦 发布准备 (Packaging & Release)
 
-- **[test] 完善测试覆盖**：
-  - 补充布局数学、输入解析等单元测试。
-  - 增加快照测试 (Snapshot Testing)，防止布局回归。
+- [x] **创建 `pyproject.toml`**：定义项目元数据、依赖和构建系统。
+- [x] **创建 `LICENSE`**：采用 MIT 协议。
+- [ ] **构建与校验**：本地测试 `python -m build` 和 `twine check`。
+- [ ] **README 润色**：增加安装说明和示例。
+- [ ] **发布到 TestPyPI**：在正式发布前进行上传验证。
+
