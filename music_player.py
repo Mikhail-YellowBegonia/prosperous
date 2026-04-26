@@ -3,6 +3,7 @@ import time
 from live import Live
 from components import BaseComponent, VStack, HStack, Text
 from styles import Style
+from animation import Tween, ease_out
 from renderers import ImageRenderer
 from utils import get_visual_width
 
@@ -200,8 +201,8 @@ def main():
         {"title": "One Kiss", "album": "One Kiss", "singer": "Calvin Harris", "duration": "03:34"},
     ]
 
-    target_index = 0.0
-    smoothed_index = 0.0
+    target_index = 0
+    idx_tween = Tween(0, 0, 0.4, easing=ease_out)
 
     with Live(fps=30, logic_fps=60) as live:
         # Left Pane
@@ -247,7 +248,7 @@ def main():
                 curve_x = round(diff**2 * 4.5)
                 # selected card at layer 30, others lower
                 layer = int(30 - abs(i - target_index))
-                selected = i == int(target_index + 0.5)
+                selected = i == target_index
                 layout_data.append((y, base_x + curve_x, layer, selected))
             return layout_data
 
@@ -263,38 +264,37 @@ def main():
             cards.append(card)
             live.add(card)
 
+        # Initial layout
+        layout_data = calculate_layout(0)
+        for i, (y, x, l, s) in enumerate(layout_data):
+            cards[i].pos = (y, x)
+            cards[i].layer = l
+            cards[i].selected = s
+
         # Main Loop
         while live.running:
             for key in live.poll():
                 if key == "ESC":
                     live.stop()
                     break
-                if key == "UP":
-                    target_index = max(0.0, target_index - 1.0)
-                if key == "DOWN":
-                    target_index = min(len(songs_data) - 1.0, target_index + 1.0)
+                if key == "UP" and target_index > 0:
+                    target_index -= 1
+                    idx_tween.restart(start=idx_tween.value, end=target_index)
+                if key == "DOWN" and target_index < len(songs_data) - 1:
+                    target_index += 1
+                    idx_tween.restart(start=idx_tween.value, end=target_index)
 
-            # ── LERP ANIMATION ──
-            if abs(smoothed_index - target_index) > 0.001:
-                smoothed_index += (target_index - smoothed_index) * 0.12
-                layout_data = calculate_layout(smoothed_index)
-                for i, (y, x, l, s) in enumerate(layout_data):
-                    cards[i].pos = (y, x)
-                    cards[i].layer = l
-                    cards[i].selected = s
-            else:
-                # Snap to target
-                if smoothed_index != target_index:
-                    smoothed_index = target_index
-                    layout_data = calculate_layout(smoothed_index)
-                    for i, (y, x, l, s) in enumerate(layout_data):
-                        cards[i].pos = (y, x)
-                        cards[i].layer = l
-                        cards[i].selected = s
+            # ── TWEEN ANIMATION ──
+            smoothed_idx = idx_tween.value
+            layout_data = calculate_layout(smoothed_idx)
+            for i, (y, x, l, s) in enumerate(layout_data):
+                cards[i].pos = (y, x)
+                cards[i].layer = l
+                cards[i].selected = s
 
             with live.frame():
                 # Dynamic update simulation
-                playing_card = cards[int(target_index + 0.5)]
+                playing_card = cards[target_index]
                 playing_card.progress = (math.sin(time.time() * 2) + 1) / 2
 
 
