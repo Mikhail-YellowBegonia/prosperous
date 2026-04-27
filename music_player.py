@@ -15,11 +15,11 @@ class KineticFocusBox(BaseComponent):
 
     def __init__(self, target_card, layer=5):
         super().__init__(layer=layer)
-        # 用 4 个动力学实例追踪 4 个维度
-        self.k_y = Kinetic(target_card.pos[0], stiffness=120, damping=14)
-        self.k_x = Kinetic(target_card.pos[1], stiffness=120, damping=14)
-        self.k_w = Kinetic(target_card.width, stiffness=100, damping=12)
-        self.k_h = Kinetic(target_card.height, stiffness=100, damping=12)
+        # 使用标准推荐参数 (stiffness=120, damping=16)
+        self.k_y = Kinetic(target_card.pos[0])
+        self.k_x = Kinetic(target_card.pos[1])
+        self.k_w = Kinetic(target_card.width)
+        self.k_h = Kinetic(target_card.height)
 
     def update(self, dt, target_card):
         # 实时感应目标的物理属性

@@ -107,11 +107,11 @@ class Kinetic:
 
     参数：
         initial_value: 起始数值
-        stiffness:     弹簧强度 (默认 170)，越大“拉力”越强。
-        damping:       阻尼系数 (默认 26)，越大越不容易抖动，越接近 1.0 越接近临界阻尼。
+        stiffness:     弹簧强度 (默认 120)，越大“拉力”越强。
+        damping:       阻尼系数 (默认 16)，越大越不容易抖动，越接近 1.0 越接近临界阻尼。
     """
 
-    def __init__(self, initial_value: float, stiffness: float = 170.0, damping: float = 26.0):
+    def __init__(self, initial_value: float, stiffness: float = 120.0, damping: float = 16.0):
         self._current_value = initial_value
         self._target_value = initial_value
         self._velocity = 0.0

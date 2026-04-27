@@ -19,6 +19,9 @@ source .venv/bin/activate && ruff format --line-length 100 .
 
 # Run the demo app
 source .venv/bin/activate && python main.py
+
+# Run the kinetic focus demo
+source .venv/bin/activate && python examples/kinetic_focus_demo.py
 ```
 
 ## Architecture
