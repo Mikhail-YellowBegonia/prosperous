@@ -1,6 +1,7 @@
 # Prosperous - 终端 UI 库
 
 ![coverage](https://img.shields.io/badge/coverage-75%25-yellow?style=flat-square)
+![AI Coding](https://img.shields.io/badge/AI_Rate-100%-green)
 
 
 ## 简介
