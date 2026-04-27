@@ -2,10 +2,10 @@
 
 ## 🚀 当前优先级 (Immediate Priority)
 
-- **[animation] 实现 `Kinetic` (动力学/物理) 动画系统**：
+- [x] **[animation] 实现 `Kinetic` (动力学/物理) 动画系统**：
   - [x] **接口设计**：已建立 `animation.py` 中的 `Kinetic` 类接口及 docstring。
-  - [ ] **物理内核**：实现基于 `dt` 的临界阻尼弹簧数值积分算法。
-  - 核心：基于状态（位置、速度、目标）而非单纯时间的模拟。
+  - [x] **物理内核实现**：基于 Euler 积分的临界阻尼弹簧算法。
+  - [x] **实战验证**：在 `music_player.py` 中实现 `KineticFocusBox` 弹性焦点框。
 - **[packaging] 完善发布流程**：
   - [ ] **README 润色**：增加安装说明、快速开始示例。
   - [ ] **构建校验**：运行 `python -m build` 并使用 `twine check` 验证。
