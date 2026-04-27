@@ -90,3 +90,56 @@ class Tween:
         if duration is not None:
             self.duration = duration
         self._t0 = time.perf_counter()
+
+
+# ── Kinetic (Physical) ────────────────────────────────────────────────────────
+
+
+class Kinetic:
+    """动力学动画系统（物理模拟）。
+
+    与 Tween 的“时间驱动”不同，Kinetic 是“状态驱动”的。它模拟了一个受弹簧力和阻力影响的物理实体。
+    非常适合处理中途可能改变目标的连续动画（如焦点跟随、弹性伸缩）。
+
+    设想方案：
+        - 采用临界阻尼弹簧模型 (Critically Damped Spring)。
+        - 核心参数：stiffness (劲度/弹性), damping (阻尼/稳定性)。
+
+    参数：
+        initial_value: 起始数值
+        stiffness:     弹簧强度 (默认 170)，越大“拉力”越强。
+        damping:       阻尼系数 (默认 26)，越大越不容易抖动，越接近 1.0 越接近临界阻尼。
+    """
+
+    def __init__(self, initial_value: float, stiffness: float = 170.0, damping: float = 26.0):
+        self._current_value = initial_value
+        self._target_value = initial_value
+        self._velocity = 0.0
+        self.stiffness = stiffness
+        self.damping = damping
+
+    @property
+    def value(self) -> float:
+        """当前的物理模拟值。"""
+        return self._current_value
+
+    @property
+    def velocity(self) -> float:
+        """当前的瞬间速度。"""
+        return self._velocity
+
+    def set_target(self, target: float):
+        """更新目标值。物体将根据当前速度平滑地滑向新目标。"""
+        self._target_value = target
+
+    def update(self, dt: float):
+        """执行一个物理步进。需在逻辑循环中手动调用，传入帧间隔 dt。"""
+        # TODO: 实现临界阻尼弹簧算法
+        # 核心逻辑：f_spring = -stiffness * (current - target); f_damper = -damping * velocity
+        pass
+
+    @property
+    def done(self) -> bool:
+        """当位移和速度都极小时视为完成。"""
+        # TODO: 实现静止状态判定逻辑
+        return abs(self._current_value - self._target_value) < 0.01 and abs(self._velocity) < 0.01
