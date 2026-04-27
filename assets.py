@@ -1,6 +1,9 @@
 from PIL import Image, ImageFont
 from utils import debug_log
-from renderers import ImageRenderer, BinmapImageRenderer
+from renderers import (
+    ImageRenderer, BinmapImageRenderer, BinmapColorImageRenderer,
+    BrailleImageRenderer, BrailleColorImageRenderer,
+)
 import os
 
 class FontRegistry:
@@ -39,6 +42,14 @@ class ImageRegistry:
             self._images[image_id] = ImageRenderer(path, target_width, **kwargs)
         elif mode == "binmap":
             self._images[image_id] = BinmapImageRenderer(path, target_width, **kwargs)
+        elif mode == "braille6":
+            self._images[image_id] = BrailleImageRenderer(path, target_width, dots=6, **kwargs)
+        elif mode == "braille8":
+            self._images[image_id] = BrailleImageRenderer(path, target_width, dots=8, **kwargs)
+        elif mode == "binmap_color":
+            self._images[image_id] = BinmapColorImageRenderer(path, target_width, **kwargs)
+        elif mode == "braille6_color":
+            self._images[image_id] = BrailleColorImageRenderer(path, target_width, dots=6, **kwargs)
         return True
 
     def get(self, image_id):

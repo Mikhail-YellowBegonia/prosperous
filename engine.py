@@ -129,6 +129,7 @@ class RenderEngine:
         # Compositing Spaces
         self.image_space = []
         self.binmap_space = []
+        self.braille_space = []
         self.dirty_cells = set()
 
         # Input State
@@ -189,6 +190,9 @@ class RenderEngine:
                 self.binmap_space = [
                     [None for _ in range(self.cli_width)] for _ in range(self.cli_height)
                 ]
+                self.braille_space = [
+                    [None for _ in range(self.cli_width)] for _ in range(self.cli_height)
+                ]
                 self.dirty_cells.clear()
                 self.screen_diff = []
 
@@ -226,6 +230,7 @@ class RenderEngine:
                     for ix in range(start_ix, max_x):
                         self.image_space[iy][ix] = None
                         self.binmap_space[iy][ix] = None
+                        self.braille_space[iy][ix] = None
 
     def commit_logic(self):
         """将 Logic 线程私有缓冲区提交到准备区。仅此处需短时间持锁。"""
@@ -238,6 +243,7 @@ class RenderEngine:
             if y < len(self.image_space) and x < len(self.image_space[0]):
                 self.image_space[y][x] = None
                 self.binmap_space[y][x] = None
+                self.braille_space[y][x] = None
         self.dirty_cells.clear()
 
     def push(self, y, x, content, style=None):
@@ -309,17 +315,30 @@ class RenderEngine:
             self.image_space[y][x] = [fg, bg]
         self.dirty_cells.add((y, x))
 
-    def push_binmap(self, y, x, char, fg):
+    def push_binmap(self, y, x, char, fg, bg=None):
         if not self._space_in_bounds(y, x):
             return
         bits = self.QUAD_TO_BITS.get(char, 0)
         if bits == 0:
             return
         if self.binmap_space[y][x] is None:
-            self.binmap_space[y][x] = [0, fg]
+            self.binmap_space[y][x] = [0, fg, bg]
         self.binmap_space[y][x][0] |= bits
         if fg is not None:
             self.binmap_space[y][x][1] = fg
+        if bg is not None:
+            self.binmap_space[y][x][2] = bg
+        self.dirty_cells.add((y, x))
+
+    def push_braille(self, y, x, bits, fg):
+        """将盲文点阵写入合成层。bits 为 8 位掩码（6-dot 只用低6位），fg 为前景色。"""
+        if not self._space_in_bounds(y, x):
+            return
+        if self.braille_space[y][x] is None:
+            self.braille_space[y][x] = [0, fg]
+        self.braille_space[y][x][0] |= bits
+        if fg is not None:
+            self.braille_space[y][x][1] = fg
         self.dirty_cells.add((y, x))
 
     def flush_spaces(self):
@@ -332,7 +351,7 @@ class RenderEngine:
                 continue
             bm = self.binmap_space[y][x]
             if bm and bm[0] > 0:
-                self.push(y, x, self.QUAD_CHAR_MAP[bm[0]], Style(fg=bm[1]))
+                self.push(y, x, self.QUAD_CHAR_MAP[bm[0]], Style(fg=bm[1], bg=bm[2]))
         # Pass 2: Image
         for y, x in self.dirty_cells:
             if y >= limit_y or x >= limit_x:
@@ -345,6 +364,13 @@ class RenderEngine:
                     self.push(y, x, "▀", Style(fg=img[0]))
                 else:
                     self.push(y, x, "▄", Style(fg=img[1]))
+        # Pass 3: Braille（最高优先级，覆盖前两者）
+        for y, x in self.dirty_cells:
+            if y >= limit_y or x >= limit_x:
+                continue
+            br = self.braille_space[y][x]
+            if br and br[0] > 0:
+                self.push(y, x, chr(0x2800 | br[0]), Style(fg=br[1]))
 
     def swap_buffers(self):
         with self.lock:
