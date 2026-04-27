@@ -5,7 +5,7 @@ import threading
 import signal
 from utils import clear_screen, debug_log
 
-from styles import Style, DEFAULT_STYLE
+from styles import Style, DEFAULT_STYLE, BOX_SINGLE
 
 
 class _RenderContext:
@@ -260,6 +260,32 @@ class RenderEngine:
                 curr_x += 2
             else:
                 curr_x += 1
+
+    def fill_rect(self, y, x, height, width, char=" ", style=None):
+        """用 char+style 填充矩形区域，不影响 image_space 合成层。"""
+        if style is None:
+            style = DEFAULT_STYLE
+        row = char * width
+        for i in range(height):
+            self.push(y + i, x, row, style)
+
+    def draw_vline(self, y, x, length, char, style=None):
+        """在 (y, x) 向下绘制长度为 length 的垂直线。"""
+        for i in range(length):
+            self.push(y + i, x, char, style)
+
+    def draw_box(self, y, x, height, width, style=None, border=None):
+        """绘制带边框的矩形轮廓（不填充内部）。
+
+        border: 8字符字符串，索引约定与 Box 组件一致：
+                0:TL 1:TR 2:BL 3:BR 4:上横 5:下横 6:左竖 7:右竖
+        """
+        b = border if border is not None else BOX_SINGLE
+        inner = width - 2
+        self.push(y, x, b[0] + b[4] * inner + b[1], style)
+        self.push(y + height - 1, x, b[2] + b[5] * inner + b[3], style)
+        self.draw_vline(y + 1, x, height - 2, b[6], style)
+        self.draw_vline(y + 1, x + width - 1, height - 2, b[7], style)
 
     def _space_in_bounds(self, y, x) -> bool:
         return (

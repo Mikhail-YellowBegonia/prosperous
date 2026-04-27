@@ -379,22 +379,14 @@ class Box(BaseComponent):
         try:
             ay, ax = self.get_absolute_pos()
             eff = self.get_effective_style()
-            b = self.border_style
 
-            # 1. 快速清理并填充背景
+            # 1. 清理区域（含合成层）并填充背景
             engine.clear_rect(ay, ax, self.height, self.width, style=eff)
             if self.background_char != " ":
-                for i in range(1, self.height - 1):
-                    engine.push(ay + i, ax + 1, self.background_char * (self.width - 2), eff)
+                engine.fill_rect(ay + 1, ax + 1, self.height - 2, self.width - 2, self.background_char, eff)
 
-            # 2. 绘制边框 (TL, TR, BL, BR, T, B, L, R)
-            # Top & Bottom
-            engine.push(ay, ax, b[0] + b[4] * (self.width - 2) + b[1], eff)
-            engine.push(ay + self.height - 1, ax, b[2] + b[5] * (self.width - 2) + b[3], eff)
-            # Left & Right
-            for i in range(1, self.height - 1):
-                engine.push(ay + i, ax, b[6], eff)
-                engine.push(ay + i, ax + self.width - 1, b[7], eff)
+            # 2. 绘制边框
+            engine.draw_box(ay, ax, self.height, self.width, eff, self.border_style)
 
             super().draw(engine)
         except Exception as e:

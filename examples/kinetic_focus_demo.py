@@ -1,5 +1,11 @@
 import time
 import math
+import sys
+import os
+
+# 确保可以导入根目录下的模块
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from live import Live
 from components import BaseComponent, Box, Label, VStack, HStack
 from styles import Style, BOX_DOUBLE, BOX_SINGLE
