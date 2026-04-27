@@ -1,5 +1,8 @@
 # Prosperous - 终端 UI 库
 
+![coverage](https://img.shields.io/badge/coverage-75%25-yellow?style=flat-square)
+
+
 ## 简介
 
 Prosperous 是一个轻量的终端 UI 库，专为**动态高频刷新**场景设计，是 Rich.Live 的轻量替代方向。它不引入文档流或约束布局，直接面向帧循环画布，帮助开发者快速搭建高性能、交互灵敏的终端应用。

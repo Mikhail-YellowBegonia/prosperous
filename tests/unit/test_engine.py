@@ -326,3 +326,74 @@ class TestDrawBox:
         assert engine.screen_logic[0][4][0] == "┐"
         assert engine.screen_logic[2][0][0] == "└"
         assert engine.screen_logic[2][4][0] == "┘"
+
+
+# ---------------------------------------------------------------------------
+# push_braille
+# ---------------------------------------------------------------------------
+
+
+class TestPushBraille:
+    def test_bits_written_to_braille_space(self, engine):
+        """push_braille should OR bits into braille_space[y][x][0]."""
+        engine.push_braille(0, 0, 0b00000111, (255, 255, 255))
+        assert engine.braille_space[0][0] is not None
+        assert engine.braille_space[0][0][0] == 0b00000111
+
+    def test_fg_stored_correctly(self, engine):
+        """push_braille should store the fg colour in braille_space[y][x][1]."""
+        fg = (100, 200, 50)
+        engine.push_braille(1, 2, 0b00001111, fg)
+        assert engine.braille_space[1][2][1] == fg
+
+    def test_bits_or_accumulate_on_repeated_push(self, engine):
+        """Multiple push_braille calls to the same cell must OR the bits together."""
+        engine.push_braille(0, 0, 0b00000001, None)
+        engine.push_braille(0, 0, 0b00000010, None)
+        engine.push_braille(0, 0, 0b00100000, None)
+        assert engine.braille_space[0][0][0] == 0b00100011
+
+    def test_fg_updated_by_subsequent_push(self, engine):
+        """A non-None fg on a later push should replace the stored fg."""
+        engine.push_braille(0, 0, 0b00000001, (10, 20, 30))
+        engine.push_braille(0, 0, 0b00000010, (40, 50, 60))
+        assert engine.braille_space[0][0][1] == (40, 50, 60)
+
+    def test_none_fg_does_not_overwrite_existing_fg(self, engine):
+        """A None fg on a subsequent push must not replace a previously stored fg."""
+        fg = (7, 8, 9)
+        engine.push_braille(0, 0, 0b00000001, fg)
+        engine.push_braille(0, 0, 0b00000010, None)
+        assert engine.braille_space[0][0][1] == fg
+
+    def test_out_of_bounds_does_not_crash(self, engine):
+        """push_braille with coordinates outside the buffer must not raise."""
+        engine.push_braille(-1, 0, 0b11111111, None)
+        engine.push_braille(0, -1, 0b11111111, None)
+        engine.push_braille(engine.cli_height, 0, 0b11111111, None)
+        engine.push_braille(0, engine.cli_width, 0b11111111, None)
+
+    def test_dirty_cells_records_pushed_coordinate(self, engine):
+        """push_braille must add (y, x) to dirty_cells."""
+        engine.push_braille(3, 5, 0b00001111, None)
+        assert (3, 5) in engine.dirty_cells
+
+    def test_dirty_cells_accumulates_multiple_coordinates(self, engine):
+        """Each distinct (y, x) pair pushed should appear in dirty_cells."""
+        engine.push_braille(0, 0, 0b00000001, None)
+        engine.push_braille(1, 2, 0b00000010, None)
+        engine.push_braille(3, 4, 0b00000100, None)
+        assert (0, 0) in engine.dirty_cells
+        assert (1, 2) in engine.dirty_cells
+        assert (3, 4) in engine.dirty_cells
+
+    def test_flush_spaces_renders_braille_char(self, engine):
+        """flush_spaces pass-3 must push the correct braille character to screen_prepare."""
+        bits = 0b00111111  # all 6 dots set → U+283F
+        engine.push_braille(0, 0, bits, (255, 255, 255))
+        # commit so screen_prepare is populated for flush_spaces
+        engine.commit_logic()
+        engine.flush_spaces()
+        engine.commit_logic()
+        char, _ = engine.screen_prepare[0][0]
+        assert char == chr(0x2800 | bits)
