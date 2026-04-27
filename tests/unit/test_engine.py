@@ -9,10 +9,11 @@ import signal
 import pytest
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
-from styles import Style, DEFAULT_STYLE, BOX_SINGLE
+from prosperous import Style, DEFAULT_STYLE, BOX_SINGLE
 
 
 # ---------------------------------------------------------------------------
@@ -397,3 +398,78 @@ class TestPushBraille:
         engine.commit_logic()
         char, _ = engine.screen_prepare[0][0]
         assert char == chr(0x2800 | bits)
+
+
+# ---------------------------------------------------------------------------
+# draw_hline & write
+# ---------------------------------------------------------------------------
+
+
+class TestEngineDrawingPrimitives:
+    def test_draw_hline(self, engine):
+        """draw_hline should write a horizontal line of characters."""
+        engine.draw_hline(0, 0, 5, "─")
+        for x in range(5):
+            assert engine.screen_logic[0][x][0] == "─"
+
+    def test_write_left_align(self, engine):
+        """write with default alignment should start at the given x."""
+        engine.write(0, 0, "Hello", width=10)
+        content = "".join(engine.screen_logic[0][x][0] for x in range(5))
+        assert content == "Hello"
+        assert engine.screen_logic[0][5][0] == " "  # Padding
+
+    def test_write_center_align(self, engine):
+        """write with center alignment should offset x correctly."""
+        # width=10, text="Hi" (len 2) -> offset = (10-2)//2 = 4
+        engine.write(0, 0, "Hi", width=10, align="center")
+        assert engine.screen_logic[0][3][0] == " "
+        assert engine.screen_logic[0][4][0] == "H"
+        assert engine.screen_logic[0][5][0] == "i"
+        assert engine.screen_logic[0][6][0] == " "
+
+    def test_write_right_align(self, engine):
+        """write with right alignment should offset x correctly."""
+        # width=10, text="Hi" (len 2) -> offset = 10-2 = 8
+        engine.write(0, 0, "Hi", width=10, align="right")
+        assert engine.screen_logic[0][7][0] == " "
+        assert engine.screen_logic[0][8][0] == "H"
+        assert engine.screen_logic[0][9][0] == "i"
+
+    def test_write_truncation(self, engine):
+        """write should truncate text that exceeds width."""
+        engine.write(0, 0, "Long text", width=4)
+        content = "".join(engine.screen_logic[0][x][0] for x in range(4))
+        assert content == "Long"
+        assert engine.screen_logic[0][4][0] == " "  # Not written
+
+    def test_write_markup(self, engine):
+        """write should correctly parse and apply markup styles."""
+        from prosperous import Style
+        engine.write(0, 0, "<bold>Bold</>")
+        assert engine.screen_logic[0][0][0] == "B"
+        assert engine.screen_logic[0][0][1].bold is True
+        assert engine.screen_logic[0][3][0] == "d"
+        assert engine.screen_logic[0][3][1].bold is True
+
+    def test_write_cjk_handling(self, engine):
+        """write should handle CJK characters and truncation correctly."""
+        # "你好" is visual width 4
+        engine.write(0, 0, "你好 world", width=6)
+        # width 6 budget: "你好" (4) + " w" (2) = 6
+        assert engine.screen_logic[0][0][0] == "你"
+        assert engine.screen_logic[0][1][0] == ""
+        assert engine.screen_logic[0][2][0] == "好"
+        assert engine.screen_logic[0][3][0] == ""
+        assert engine.screen_logic[0][4][0] == " "
+        assert engine.screen_logic[0][5][0] == "w"
+        assert engine.screen_logic[0][6][0] == " "  # budget exhausted
+
+    def test_write_cjk_truncation_boundary(self, engine):
+        """write should not split a CJK character at the width boundary."""
+        # "你好" is visual width 4. width=3 budget.
+        # "你" (2) -> budget remains 1. "好" (2) > 1 -> skip.
+        engine.write(0, 0, "你好", width=3)
+        assert engine.screen_logic[0][0][0] == "你"
+        assert engine.screen_logic[0][1][0] == ""
+        assert engine.screen_logic[0][2][0] == " "

@@ -6,10 +6,11 @@ import os
 import pytest
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
-from animation import Tween, linear, ease_in, ease_out, ease_in_out
+from prosperous import Tween, linear, ease_in, ease_out, ease_in_out
 
 
 # ── Easing functions ──────────────────────────────────────────────────────────

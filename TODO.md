@@ -18,6 +18,7 @@
   - 允许使用方向键根据屏幕坐标查找最近组件，而非线性循环。
 - **[engine] 区域管理**：
   - `RenderEngine` 对屏幕区域的逻辑划分（子裁剪区）。
+- [x] **[engine] 底层绘图工具链**：实现 `fill_rect`, `vline`, `hline`, `draw_box`, `write` (对齐/截断/Markup) 等原子化绘图原语。
 - [x] **[engine] PPrint 模仿尝试 (Markup & RichText)**：
   - 引入 `markup.py` 支持 `<tag>` 语义化标记。
   - 重构为 `Label` (轻量单行) 和 `Text` (多行/对齐/标记) 两个组件。

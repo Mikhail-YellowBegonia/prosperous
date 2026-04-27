@@ -1,6 +1,31 @@
+Metadata-Version: 2.4
+Name: prosperous
+Version: 0.1.0
+Summary: A lightweight terminal UI library for high-frequency dynamic refresh scenarios.
+Author-email: Mikhail-YellowBegonia <doctorsergei2021@gmail.com>
+Project-URL: Homepage, https://github.com/Mikhail-YellowBegonia/prosperous
+Project-URL: Bug Tracker, https://github.com/Mikhail-YellowBegonia/prosperous/issues
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Environment :: Console
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: Pillow>=9.0.0
+Dynamic: license-file
+
 # Prosperous - Terminal UI Library / 终端 UI 库
 
-![coverage](https://img.shields.io/badge/coverage-75%25-yellow?style=flat-square) [![PyPI Version](https://img.shields.io/pypi/v/prosperous.svg?style=flat-square)](https://pypi.org/project/prosperous/) [![Python Versions](https://img.shields.io/pypi/pyversions/prosperous.svg?style=flat-square)](https://pypi.org/project/prosperous/)
+![coverage](https://img.shields.io/badge/coverage-75%25-yellow?style=flat-square)
 
 [English](#introduction) | [中文](#简介)
 

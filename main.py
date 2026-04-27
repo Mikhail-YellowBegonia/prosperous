@@ -1,10 +1,10 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-from live import Live
-from assets import images
+from prosperous import Live
+from prosperous.assets import images
 
 IMG_PATH = os.path.join(os.path.dirname(__file__), "img", "square_cat.png")
 TARGET_W = 20

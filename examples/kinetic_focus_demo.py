@@ -4,12 +4,9 @@ import sys
 import os
 
 # 确保可以导入根目录下的模块
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from live import Live
-from components import BaseComponent, Box, Label, VStack, HStack
-from styles import Style, BOX_DOUBLE, BOX_SINGLE
-from animation import Kinetic
+from prosperous import Live, BaseComponent, Box, Label, VStack, HStack, Style, BOX_DOUBLE, BOX_SINGLE, Kinetic
 
 class TargetBox(Box):
     def __init__(self, id_name, pos=(0, 0), width=10, height=5):

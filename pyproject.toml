@@ -33,11 +33,18 @@ dependencies = [
 "Homepage" = "https://github.com/Mikhail-YellowBegonia/prosperous"
 "Bug Tracker" = "https://github.com/Mikhail-YellowBegonia/prosperous/issues"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+prosperous = ["*.ttf"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.coverage.run]
-source = ["."]
+source = ["src"]
 omit = [
     "main.py",
     "music_player.py",

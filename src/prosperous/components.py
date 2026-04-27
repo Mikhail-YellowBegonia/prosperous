@@ -1,6 +1,6 @@
-from styles import Style, DEFAULT_STYLE
+from .styles import Style, DEFAULT_STYLE
 from typing import Callable, List, Optional, Union
-from utils import debug_log, get_visual_width
+from .utils import debug_log, get_visual_width
 
 
 class BaseComponent:
@@ -8,9 +8,13 @@ class BaseComponent:
 
     坐标系说明：
         - pos=(row, col)，均从 0 开始。
-        - 顶层组件：若组件没有父组件（直接通过 live.add() 添加），则 pos 为屏幕绝对坐标。
-        - 子组件：pos 相对于父组件的内容原点。例如 Panel 内的子组件 (0,0) 对应边框内部的第一格。
-        - 自动布局：VStack/HStack 等容器会根据子组件顺序自动计算其有效原点，通常忽略子组件自身的 pos。
+        - 顶层组件：直接通过 live.add() 添加、没有父组件（parent is None）时，pos 即屏幕绝对坐标。
+        - 子组件：pos 是相对于父组件内容原点（get_child_origin()）的偏移量。
+          例如 Panel 内子组件 pos=(0,0) 对应边框+padding 内侧的第一格，而非屏幕 (0,0)。
+        - 同一个 pos 字段在两种情况下含义不同，分水岭是 parent is None。
+          需要在运行时获取屏幕绝对坐标时，请调用 get_absolute_pos()。
+        - 自动布局：VStack/HStack 等容器覆盖 get_child_origin(child)，子组件的 pos
+          仍然生效但是叠加在容器计算的原点之上，通常保持 (0,0) 即可。
 
     样式继承：子组件未指定的样式属性自动继承父组件。
     层级排序：layer 值越大越后绘制（越靠上层）。
@@ -184,7 +188,7 @@ class InputBox(BaseComponent):
         on_enter=None,
         on_key=None,
     ):
-        from theme import get_theme
+        from .theme import get_theme
 
         t = get_theme("InputBox")
         super().__init__(
@@ -206,7 +210,7 @@ class InputBox(BaseComponent):
         return self.width
 
     def handle_input(self, key):
-        from input_handler import InputHandler
+        from .input_handler import InputHandler
 
         try:
             if key == "BACKSPACE":
@@ -292,7 +296,7 @@ class Button(BaseComponent):
         on_enter=None,
         on_key=None,
     ):
-        from theme import get_theme
+        from .theme import get_theme
 
         t = get_theme("Button")
         super().__init__(
@@ -355,7 +359,7 @@ class Box(BaseComponent):
         visible=True,
         children=None,
     ):
-        from styles import BOX_SINGLE
+        from .styles import BOX_SINGLE
 
         super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
         self.width = width
@@ -415,7 +419,7 @@ class Panel(Box):
         visible=True,
         children=None,
     ):
-        from theme import get_theme
+        from .theme import get_theme
 
         t = get_theme("Panel")
         resolved_style = style if style is not None else t.get("style")
@@ -539,7 +543,7 @@ class Text(BaseComponent):
             return content
             
         # 内容发生变化，重新解析
-        from markup import parse_markup
+        from .markup import parse_markup
         eff_style = self.get_effective_style()
         
         if self.markup:
@@ -616,7 +620,7 @@ class ProgressBar(BaseComponent):
         style=None,
         layer=0,
     ):
-        from theme import get_theme
+        from .theme import get_theme
 
         t = get_theme("ProgressBar")
         super().__init__(pos=pos, style=style, layer=layer)

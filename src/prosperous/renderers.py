@@ -1,5 +1,5 @@
 from PIL import Image
-from styles import Style
+from .styles import Style
 
 # 盲文点位到 bit 的映射（标准 Unicode 盲文编码）
 # 排列：左列从上到下 bit0/1/2，右列从上到下 bit3/4/5，第4行左右 bit6/7（仅8点）
@@ -40,7 +40,7 @@ class BinmapRenderer:
 
 
 class BinmapImageRenderer:
-    def __init__(self, path, target_width, fg=(255, 255, 255), cell_aspect=2.5):
+    def __init__(self, path, target_width, fg=(255, 255, 255), cell_aspect=2.0):
         self.path = path
         self.fg = fg
         img = Image.open(path).convert("RGBA")
@@ -58,8 +58,9 @@ class BinmapImageRenderer:
         ]
         self.renderer = BinmapRenderer(self.matrix, fg=self.fg)
 
-    def draw(self, start_y, start_x, engine):
-        self.renderer.draw(start_y, start_x, engine.push_binmap)
+    def draw(self, start_y, start_x, engine, layer=0):
+        self.renderer.draw(start_y, start_x,
+                           lambda y, x, c, fg: engine.push_binmap(y, x, c, fg, layer=layer))
 
 
 class BinmapColorRenderer:
@@ -104,7 +105,7 @@ class BinmapColorImageRenderer:
     亮点像素（alpha>0 且亮度>0）均值 → fg；暗点像素均值 → bg（sRGB 直接平均）。
     """
 
-    def __init__(self, path, target_width, cell_aspect=2.5, threshold=10):
+    def __init__(self, path, target_width, cell_aspect=2.0, threshold=10):
         img = Image.open(path).convert("RGBA")
         w, h = img.size
         pixel_w = target_width * 2
@@ -143,8 +144,9 @@ class BinmapColorImageRenderer:
 
         self.renderer = BinmapColorRenderer(self.matrix, self.block_colors)
 
-    def draw(self, start_y, start_x, engine):
-        self.renderer.draw(start_y, start_x, engine.push_binmap)
+    def draw(self, start_y, start_x, engine, layer=0):
+        self.renderer.draw(start_y, start_x,
+                           lambda y, x, c, fg, bg=None: engine.push_binmap(y, x, c, fg, bg, layer))
 
 
 def _avg_rgb(pixels):
@@ -191,7 +193,7 @@ class BrailleColorImageRenderer:
     fg 为块内所有不透明像素的 sRGB 均值，灰度/点阵形状仍由二值化决定。
     """
 
-    def __init__(self, path, target_width, dots=6, cell_aspect=2.5):
+    def __init__(self, path, target_width, dots=6, cell_aspect=2.0):
         rows_per_cell = 3 if dots == 6 else 4
         img = Image.open(path).convert("RGBA")
         w, h = img.size
@@ -225,8 +227,9 @@ class BrailleColorImageRenderer:
 
         self.renderer = BrailleColorRenderer(self.matrix, self.block_fg, dots=dots)
 
-    def draw(self, start_y, start_x, engine):
-        self.renderer.draw(start_y, start_x, engine.push_braille)
+    def draw(self, start_y, start_x, engine, layer=0):
+        self.renderer.draw(start_y, start_x,
+                           lambda y, x, bits, fg: engine.push_braille(y, x, bits, fg, layer))
 
 
 class ImageRenderer:
@@ -296,7 +299,7 @@ class ImageRenderer:
                 min_dist, idx = d, i
         return idx
 
-    def draw(self, start_y, start_x, engine):
+    def draw(self, start_y, start_x, engine, layer=0):
         threshold = 128
         for y in range(0, self.height, 2):
             for x in range(self.width):
@@ -308,11 +311,11 @@ class ImageRenderer:
                 if t_alpha < threshold and b_alpha < threshold:
                     continue
                 elif t_alpha < threshold:
-                    engine.push_image(start_y + (y // 2), start_x + x, "▄", b_color, None)
+                    engine.push_image(start_y + (y // 2), start_x + x, "▄", b_color, None, layer)
                 elif b_alpha < threshold:
-                    engine.push_image(start_y + (y // 2), start_x + x, "▀", t_col, None)
+                    engine.push_image(start_y + (y // 2), start_x + x, "▀", t_col, None, layer)
                 else:
-                    engine.push_image(start_y + (y // 2), start_x + x, "▀", t_col, b_color)
+                    engine.push_image(start_y + (y // 2), start_x + x, "▀", t_col, b_color, layer)
 
 
 class BrailleRenderer:
@@ -351,7 +354,7 @@ class BrailleImageRenderer:
     dots=8 → 2×4 像素/格（分辨率 4× half-block）
     """
 
-    def __init__(self, path, target_width, fg=(255, 255, 255), dots=8, cell_aspect=2.5):
+    def __init__(self, path, target_width, fg=(255, 255, 255), dots=8, cell_aspect=2.0):
         self.fg = fg
         rows_per_cell = 3 if dots == 6 else 4
 
@@ -370,5 +373,6 @@ class BrailleImageRenderer:
         ]
         self.renderer = BrailleRenderer(self.matrix, dots=dots, fg=fg)
 
-    def draw(self, start_y, start_x, engine):
-        self.renderer.draw(start_y, start_x, engine.push_braille)
+    def draw(self, start_y, start_x, engine, layer=0):
+        self.renderer.draw(start_y, start_x,
+                           lambda y, x, bits, fg: engine.push_braille(y, x, bits, fg, layer))

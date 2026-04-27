@@ -1,7 +1,7 @@
 import re
 from typing import List, Tuple, Optional
-from styles import Style, DEFAULT_STYLE
-from theme import get_theme
+from .styles import Style, DEFAULT_STYLE
+from .theme import get_theme
 
 class MarkupParser:
     """Prosperous 标记解析器。

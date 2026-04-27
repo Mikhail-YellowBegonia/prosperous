@@ -1,5 +1,5 @@
 from typing import List, Optional
-from components import BaseComponent
+from .components import BaseComponent
 
 
 class FocusManager:

@@ -1,5 +1,5 @@
 from PIL import Image, ImageFont
-from utils import debug_log
+from .utils import debug_log
 
 
 class FontManager:
@@ -81,7 +81,7 @@ class BigTextRenderer:
                     full_matrix[y][curr_x + x] = matrix[y][x]
             curr_x += w
 
-        from renderers import BinmapRenderer
+        from .renderers import BinmapRenderer
 
         br = BinmapRenderer(full_matrix, fg=fg)
         br.draw(start_y, start_x, push_binmap_func)

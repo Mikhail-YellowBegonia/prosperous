@@ -9,8 +9,9 @@ import pytest
 
 # Ensure the project root is importable regardless of where pytest is invoked.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+SRC_DIR = os.path.join(PROJECT_ROOT, "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ def make_engine(monkeypatch):
         # Suppress SIGWINCH registration (not valid in all test environments)
         monkeypatch.setattr(signal, "signal", lambda *a, **kw: None)
 
-        from engine import RenderEngine
+        from prosperous.engine import RenderEngine
 
         engine = RenderEngine()
         return engine
@@ -63,8 +64,8 @@ def reset_theme():
     Reset the global theme to DEFAULT_THEME before every test so that
     theme mutations in one test do not bleed into another.
     """
-    import theme as theme_module
-    from theme import DEFAULT_THEME
+    from prosperous import theme as theme_module
+    from prosperous.theme import DEFAULT_THEME
     import copy
 
     original = copy.deepcopy(DEFAULT_THEME)

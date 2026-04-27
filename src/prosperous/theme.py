@@ -1,4 +1,4 @@
-from styles import Style
+from .styles import Style
 
 DEFAULT_THEME = {
     "Panel": {

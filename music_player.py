@@ -1,11 +1,19 @@
 import math
 import time
-from live import Live
-from components import BaseComponent, VStack, HStack, Label, Text
-from styles import Style
-from animation import Tween, Kinetic, ease_out
-from renderers import ImageRenderer
-from utils import get_visual_width
+from prosperous import (
+    Live,
+    BaseComponent,
+    VStack,
+    HStack,
+    Label,
+    Text,
+    Style,
+    Tween,
+    Kinetic,
+    ease_out,
+    ImageRenderer,
+)
+from prosperous.utils import get_visual_width
 
 # ── Custom Components ────────────────────────────────────────
 

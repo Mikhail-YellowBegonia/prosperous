@@ -1,10 +1,10 @@
 import time
 import threading
 import contextlib
-from engine import RenderEngine
-from input_handler import InputHandler
-from interaction import FocusManager
-from utils import cleanup
+from .engine import RenderEngine
+from .input_handler import InputHandler
+from .interaction import FocusManager
+from .utils import cleanup
 
 
 class Live:

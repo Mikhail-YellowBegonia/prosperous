@@ -1,7 +1,7 @@
 import pytest
-from components import Text
-from styles import Style, DEFAULT_STYLE
-from theme import set_theme, DEFAULT_THEME
+from prosperous import Text
+from prosperous import Style, DEFAULT_STYLE
+from prosperous import set_theme, DEFAULT_THEME
 
 def cell_char(engine, row, col):
     return engine.screen_logic[row][col][0]

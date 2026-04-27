@@ -3,9 +3,9 @@ import sys
 import time
 import threading
 import signal
-from utils import clear_screen, debug_log
-
-from styles import Style, DEFAULT_STYLE, BOX_SINGLE
+from .utils import clear_screen, debug_log, get_visual_width
+from .markup import parse_markup
+from .styles import Style, DEFAULT_STYLE, BOX_SINGLE
 
 
 class _RenderContext:
@@ -280,6 +280,69 @@ class RenderEngine:
         for i in range(length):
             self.push(y + i, x, char, style)
 
+    def draw_hline(self, y, x, width, char, style=None):
+        """在 (y, x) 向右绘制长度为 width 的水平线。"""
+        self.push(y, x, char * width, style)
+
+    def write(self, y, x, text, style=None, width=None, align="left", markup=True):
+        """增强型文本写入，支持富文本、对齐和截断。
+
+        参数：
+            y, x:   起始坐标。
+            text:   文本内容（支持 markup 标签）。
+            style:  基础样式，markup 会在此基础上合并。
+            width:  显示宽度限制，提供对齐参考及溢出截断。
+            align:  对齐方式 ("left", "center", "right")，仅在提供 width 时生效。
+            markup: 是否解析 markup 标签，默认为 True。
+        """
+        # 1. 解析 Markup 或 简单文本
+        if markup:
+            # parse_markup 返回格式：[ [(text, style), ...], ... ] (多行列表)
+            # write 定位为单行增强写入，我们只取第一行
+            parsed_lines = parse_markup(text, style)
+            segments = parsed_lines[0] if parsed_lines else []
+        else:
+            segments = [(text, style or DEFAULT_STYLE)]
+
+        # 2. 计算视觉总宽度
+        total_visual_width = sum(get_visual_width(txt) for txt, _ in segments)
+
+        # 3. 计算对齐偏移
+        offset_x = 0
+        if width is not None:
+            if align == "center":
+                offset_x = max(0, (width - total_visual_width) // 2)
+            elif align == "right":
+                offset_x = max(0, width - total_visual_width)
+
+        # 4. 执行写入与视觉截断
+        curr_rel_x = 0
+        remaining_budget = width if width is not None else float("inf")
+
+        for txt, segment_style in segments:
+            if remaining_budget <= 0:
+                break
+
+            # 检查该段文本是否会超出剩余预算
+            seg_width = get_visual_width(txt)
+            if seg_width <= remaining_budget:
+                # 整段写入
+                self.push(y, x + offset_x + curr_rel_x, txt, segment_style)
+                curr_rel_x += seg_width
+                remaining_budget -= seg_width
+            else:
+                # 溢出截断：逐字符计算剩余预算
+                truncated_txt = ""
+                acc = 0
+                for char in txt:
+                    cw = get_visual_width(char)
+                    if acc + cw > remaining_budget:
+                        break
+                    truncated_txt += char
+                    acc += cw
+                self.push(y, x + offset_x + curr_rel_x, truncated_txt, segment_style)
+                break  # 已达宽度上限，停止处理后续片段
+
     def draw_box(self, y, x, height, width, style=None, border=None):
         """绘制带边框的矩形轮廓（不填充内部）。
 
@@ -300,11 +363,11 @@ class RenderEngine:
             and 0 <= x < len(self.image_space[0])
         )
 
-    def push_image(self, y, x, char, fg, bg):
+    def push_image(self, y, x, char, fg, bg, layer=0):
         if not self._space_in_bounds(y, x):
             return
         if self.image_space[y][x] is None:
-            self.image_space[y][x] = [None, None]
+            self.image_space[y][x] = [None, None, layer]
         if char == "▀":
             self.image_space[y][x][0] = fg
             if bg is not None:
@@ -312,17 +375,18 @@ class RenderEngine:
         elif char == "▄":
             self.image_space[y][x][1] = fg
         elif char == "█":
-            self.image_space[y][x] = [fg, bg]
+            self.image_space[y][x][0] = fg
+            self.image_space[y][x][1] = bg
         self.dirty_cells.add((y, x))
 
-    def push_binmap(self, y, x, char, fg, bg=None):
+    def push_binmap(self, y, x, char, fg, bg=None, layer=0):
         if not self._space_in_bounds(y, x):
             return
         bits = self.QUAD_TO_BITS.get(char, 0)
         if bits == 0:
             return
         if self.binmap_space[y][x] is None:
-            self.binmap_space[y][x] = [0, fg, bg]
+            self.binmap_space[y][x] = [0, fg, bg, layer]
         self.binmap_space[y][x][0] |= bits
         if fg is not None:
             self.binmap_space[y][x][1] = fg
@@ -330,47 +394,81 @@ class RenderEngine:
             self.binmap_space[y][x][2] = bg
         self.dirty_cells.add((y, x))
 
-    def push_braille(self, y, x, bits, fg):
+    def push_braille(self, y, x, bits, fg, layer=0):
         """将盲文点阵写入合成层。bits 为 8 位掩码（6-dot 只用低6位），fg 为前景色。"""
         if not self._space_in_bounds(y, x):
             return
         if self.braille_space[y][x] is None:
-            self.braille_space[y][x] = [0, fg]
+            self.braille_space[y][x] = [0, fg, layer]
         self.braille_space[y][x][0] |= bits
         if fg is not None:
             self.braille_space[y][x][1] = fg
         self.dirty_cells.add((y, x))
 
+    # layer 优先级常量：相同 layer 时 braille > image > binmap
+    _SPACE_PRIO = {'binmap': 0, 'image': 1, 'braille': 2}
+
     def flush_spaces(self):
         if not self.screen_prepare or not self.image_space:
             return
         limit_y, limit_x = len(self.screen_prepare), len(self.screen_prepare[0])
-        # Pass 1: Binmap
+
         for y, x in self.dirty_cells:
             if y >= limit_y or x >= limit_x:
                 continue
-            bm = self.binmap_space[y][x]
-            if bm and bm[0] > 0:
-                self.push(y, x, self.QUAD_CHAR_MAP[bm[0]], Style(fg=bm[1], bg=bm[2]))
-        # Pass 2: Image
-        for y, x in self.dirty_cells:
-            if y >= limit_y or x >= limit_x:
-                continue
+
+            bm  = self.binmap_space[y][x]
             img = self.image_space[y][x]
-            if img and (img[0] is not None or img[1] is not None):
-                if img[0] is not None and img[1] is not None:
-                    self.push(y, x, "▀", Style(fg=img[0], bg=img[1]))
-                elif img[0] is not None:
-                    self.push(y, x, "▀", Style(fg=img[0]))
-                else:
-                    self.push(y, x, "▄", Style(fg=img[1]))
-        # Pass 3: Braille（最高优先级，覆盖前两者）
-        for y, x in self.dirty_cells:
-            if y >= limit_y or x >= limit_x:
+            br  = self.braille_space[y][x]
+
+            bm_valid  = bm  is not None and bm[0] > 0
+            img_valid = img is not None and (img[0] is not None or img[1] is not None)
+            br_valid  = br  is not None and br[0] > 0
+
+            # 无冲突快路径（绝大多数情况）
+            n = bm_valid + img_valid + br_valid
+            if n == 0:
                 continue
-            br = self.braille_space[y][x]
-            if br and br[0] > 0:
-                self.push(y, x, chr(0x2800 | br[0]), Style(fg=br[1]))
+            if n == 1:
+                if bm_valid:
+                    self.push(y, x, self.QUAD_CHAR_MAP[bm[0]], Style(fg=bm[1], bg=bm[2]))
+                elif img_valid:
+                    self._flush_image_cell(y, x, img)
+                else:
+                    self.push(y, x, chr(0x2800 | br[0]), Style(fg=br[1]))
+                continue
+
+            # 冲突：按 (layer, type_priority) 取最高者
+            best_key = (-1, -1)
+            winner = None
+            if bm_valid:
+                k = (bm[3], self._SPACE_PRIO['binmap'])
+                if k > best_key:
+                    best_key, winner = k, ('binmap', bm)
+            if img_valid:
+                k = (img[2], self._SPACE_PRIO['image'])
+                if k > best_key:
+                    best_key, winner = k, ('image', img)
+            if br_valid:
+                k = (br[2], self._SPACE_PRIO['braille'])
+                if k > best_key:
+                    best_key, winner = k, ('braille', br)
+
+            wtype, wdata = winner
+            if wtype == 'binmap':
+                self.push(y, x, self.QUAD_CHAR_MAP[wdata[0]], Style(fg=wdata[1], bg=wdata[2]))
+            elif wtype == 'image':
+                self._flush_image_cell(y, x, wdata)
+            else:
+                self.push(y, x, chr(0x2800 | wdata[0]), Style(fg=wdata[1]))
+
+    def _flush_image_cell(self, y, x, img):
+        if img[0] is not None and img[1] is not None:
+            self.push(y, x, "▀", Style(fg=img[0], bg=img[1]))
+        elif img[0] is not None:
+            self.push(y, x, "▀", Style(fg=img[0]))
+        else:
+            self.push(y, x, "▄", Style(fg=img[1]))
 
     def swap_buffers(self):
         with self.lock:

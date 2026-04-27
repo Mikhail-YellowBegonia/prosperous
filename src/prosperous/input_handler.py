@@ -5,7 +5,7 @@ import tty
 import threading
 import select
 import codecs
-from utils import debug_log
+from .utils import debug_log
 
 
 class InputHandler:

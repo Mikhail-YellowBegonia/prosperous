@@ -1,6 +1,6 @@
 from PIL import Image, ImageFont
-from utils import debug_log
-from renderers import (
+from .utils import debug_log
+from .renderers import (
     ImageRenderer, BinmapImageRenderer, BinmapColorImageRenderer,
     BrailleImageRenderer, BrailleColorImageRenderer,
 )
@@ -13,7 +13,7 @@ class FontRegistry:
 
     def register(self, font_id, font_path, size=16, vertical_compress=False):
         """预加载字体并注册 ID。"""
-        from font import FontManager
+        from .font import FontManager
         if not os.path.exists(font_path):
             debug_log(f"[FontRegistry] Error: Font path not found: {font_path}")
             return False
