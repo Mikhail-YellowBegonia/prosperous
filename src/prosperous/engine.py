@@ -132,6 +132,10 @@ class RenderEngine:
         self.braille_space = []
         self.dirty_cells = set()
 
+        # Clipping
+        self._clip_stack = []
+        self._current_clip = None # (y, x, h, w)
+
         # Input State
         self.last_key = None
         self.input_events = []
@@ -153,6 +157,35 @@ class RenderEngine:
         # 全局隐藏硬件光标
         sys.stdout.write("\033[?25l")
         sys.stdout.flush()
+
+    def push_clip(self, y, x, h, w):
+        """推送一个新的裁剪区域，新区域会与当前区域取交集。"""
+        if self._current_clip is None:
+            new_clip = (y, x, h, w)
+        else:
+            cy, cx, ch, cw = self._current_clip
+            # 计算交集
+            ny = max(y, cy)
+            nx = max(x, cx)
+            ny_end = min(y + h, cy + ch)
+            nx_end = min(x + w, cx + cw)
+            nh = max(0, ny_end - ny)
+            nw = max(0, nx_end - nx)
+            new_clip = (ny, nx, nh, nw)
+        
+        self._clip_stack.append(self._current_clip)
+        self._current_clip = new_clip
+
+    def pop_clip(self):
+        """恢复上一个裁剪区域。"""
+        if self._clip_stack:
+            self._current_clip = self._clip_stack.pop()
+        else:
+            self._current_clip = None
+
+    def get_current_clip(self) -> Optional[tuple]:
+        """获取当前生效的裁剪区域 (y, x, h, w)。None 表示不限制（全屏）。"""
+        return self._current_clip
 
     def listen_size(self):
         if not self._resize_pending and self.size_dump != (0, 0):
@@ -247,25 +280,38 @@ class RenderEngine:
         self.dirty_cells.clear()
 
     def push(self, y, x, content, style=None):
-        """将字符串写入私有渲染缓冲区 (screen_logic)。"""
+        """将字符串写入私有渲染缓冲区 (screen_logic)。支持裁剪。"""
         if style is None:
             style = DEFAULT_STYLE
         if not self.screen_logic or y < 0 or y >= len(self.screen_logic):
             return
 
-        limit_x = len(self.screen_logic[0])
+        if self._current_clip:
+            cy, cx, ch, cw = self._current_clip
+            if y < cy or y >= cy + ch:
+                return
+            limit_x = min(len(self.screen_logic[0]), cx + cw)
+            start_x = cx
+        else:
+            limit_x = len(self.screen_logic[0])
+            start_x = 0
+
         curr_x = x
         for char in content:
-            if curr_x < 0 or curr_x >= limit_x:
+            if curr_x >= limit_x:
                 break
             width = 2 if ord(char) > 128 and not (0x2500 <= ord(char) <= 0x259F) else 1
-            self.screen_logic[y][curr_x] = (char, style)
-            if width == 2:
-                if curr_x + 1 < limit_x:
-                    self.screen_logic[y][curr_x + 1] = ("", style)
-                curr_x += 2
+            
+            if curr_x >= start_x:
+                self.screen_logic[y][curr_x] = (char, style)
+                if width == 2:
+                    if curr_x + 1 < limit_x:
+                        self.screen_logic[y][curr_x + 1] = ("", style)
+                    curr_x += 2
+                else:
+                    curr_x += 1
             else:
-                curr_x += 1
+                curr_x += width
 
     def fill_rect(self, y, x, height, width, char=" ", style=None):
         """用 char+style 填充矩形区域，不影响 image_space 合成层。"""
@@ -357,11 +403,17 @@ class RenderEngine:
         self.draw_vline(y + 1, x + width - 1, height - 2, b[7], style)
 
     def _space_in_bounds(self, y, x) -> bool:
-        return (
+        if not (
             bool(self.image_space)
             and 0 <= y < len(self.image_space)
             and 0 <= x < len(self.image_space[0])
-        )
+        ):
+            return False
+        
+        if self._current_clip:
+            cy, cx, ch, cw = self._current_clip
+            return cy <= y < cy + ch and cx <= x < cx + cw
+        return True
 
     def push_image(self, y, x, char, fg, bg, layer=0):
         if not self._space_in_bounds(y, x):

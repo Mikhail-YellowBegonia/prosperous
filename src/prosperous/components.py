@@ -1,6 +1,6 @@
 from .styles import Style, DEFAULT_STYLE
 from typing import Callable, List, Optional, Union
-from .utils import debug_log, get_visual_width
+from .utils import debug_log, get_visual_width, rect_overlaps
 
 
 class BaseComponent:
@@ -33,6 +33,8 @@ class BaseComponent:
         layer: int = 0,
         focusable: bool = False,
         visible: bool = True,
+        clipping: bool = False,
+        culling: bool = False,
         id: str = None,
         children: List["BaseComponent"] = None,
         on_enter=None,
@@ -40,20 +42,26 @@ class BaseComponent:
         on_focus=None,
         on_blur=None,
     ):
+        self._pos = (0, 0)
         try:
-            self.pos = (int(pos[0]), int(pos[1]))
+            self._pos = (int(pos[0]), int(pos[1]))
         except (TypeError, IndexError, ValueError):
-            debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, defaulting to (1, 1)")
-            self.pos = (1, 1)
+            debug_log(f"[BaseComponent] Warning: Invalid pos {pos}, defaulting to (0, 0)")
+            self._pos = (0, 0)
 
         self.style = style or Style()
         self.layer = layer
         self.focusable = focusable
         self.visible = visible
+        self.clipping = clipping
+        self.culling = culling
         self.id = id
         self.is_focused = False
         self.parent: Optional["BaseComponent"] = None
         self.children: List["BaseComponent"] = []
+        
+        self._abs_rect = (0, 0, 0, 0) # (y, x, h, w) 缓存
+        self._needs_update = True     # 脏标记
 
         if on_enter is not None:
             self.on_enter = on_enter
@@ -67,6 +75,28 @@ class BaseComponent:
         if children:
             for child in children:
                 self.add_child(child)
+
+    @property
+    def pos(self) -> tuple:
+        """获取组件相对于父容器内容原点的坐标 (row, col)。"""
+        return self._pos
+
+    @pos.setter
+    def pos(self, value: tuple):
+        """设置坐标并标记自身及子树为脏。"""
+        try:
+            new_pos = (int(value[0]), int(value[1]))
+            if self._pos != new_pos:
+                self._pos = new_pos
+                self.set_dirty()
+        except (TypeError, IndexError, ValueError):
+            debug_log(f"[BaseComponent] Error: Invalid pos value {value}")
+
+    def set_dirty(self):
+        """标记本组件及其所有后代组件需要重新计算绝对坐标。"""
+        self._needs_update = True
+        for child in self.children:
+            child.set_dirty()
 
     def on_focus(self):
         """获得焦点时由 FocusManager 调用。可赋值覆盖以添加自定义行为。"""
@@ -150,16 +180,48 @@ class BaseComponent:
             debug_log(f"[BaseComponent] Error in style resolution: {e}")
             return DEFAULT_STYLE
 
+    def get_abs_rect(self) -> tuple:
+        """获取并缓存本组件在屏幕上的绝对矩形区域 (y, x, h, w)。
+        采用懒惰更新机制：仅在标记为脏时重新计算。"""
+        if self._needs_update:
+            try:
+                ay, ax = self.get_absolute_pos()
+                self._abs_rect = (ay, ax, self.get_height(), self.get_width())
+                self._needs_update = False
+            except Exception as e:
+                debug_log(f"[BaseComponent] Error calculating absolute rect: {e}")
+                return (0, 0, 0, 0)
+        return self._abs_rect
+
+    def _should_cull(self, engine) -> bool:
+        """检查当前组件是否满足剔除条件（开启剔除且在视口外）。"""
+        if not self.culling:
+            return False
+        clip = engine.get_current_clip()
+        viewport = clip if clip else (0, 0, engine.cli_height, engine.cli_width)
+        return not rect_overlaps(self.get_abs_rect(), viewport)
+
     def draw(self, engine):
-        """递归绘制所有子组件，单个子组件异常不影响其余组件。visible=False 时跳过自身及所有子组件。"""
-        if not self.visible:
+        """标准绘制流程：可见性检查 -> 自动剔除 -> 裁剪开启 -> 绘制子级 -> 裁剪关闭。"""
+        if not self.visible or self._should_cull(engine):
             return
+
+        # 1. 开启裁剪 (Clipping)
+        if self.clipping:
+            # 子类（如 Box）可覆盖此逻辑以精确控制内容区裁剪
+            engine.push_clip(*self.get_abs_rect())
+
+        # 2. 绘制子组件
         for child in self.children:
             try:
                 if child.visible:
                     child.draw(engine)
             except Exception as e:
                 debug_log(f"[BaseComponent] Child component draw failed: {e}")
+
+        # 3. 关闭裁剪
+        if self.clipping:
+            engine.pop_clip()
 
 
 class InputBox(BaseComponent):
@@ -228,6 +290,9 @@ class InputBox(BaseComponent):
         self.text = ""
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
         import time
 
         try:
@@ -317,6 +382,9 @@ class Button(BaseComponent):
         return self.width
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
         try:
             ay, ax = self.get_absolute_pos()
             eff_style = self.get_effective_style()
@@ -357,16 +425,56 @@ class Box(BaseComponent):
         layer=0,
         padding=0,
         visible=True,
+        clipping=False,
+        culling=False,
         children=None,
     ):
         from .styles import BOX_SINGLE
 
-        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
-        self.width = width
-        self.height = height
+        super().__init__(
+            pos=pos, 
+            style=style, 
+            layer=layer, 
+            visible=visible, 
+            clipping=clipping,
+            culling=culling,
+            children=children
+        )
+        self._width = width
+        self._height = height
+        self._padding = padding
         self.border_style = border_style or BOX_SINGLE
         self.background_char = background_char
-        self.padding = padding
+
+    @property
+    def width(self) -> int:
+        return self._width
+
+    @width.setter
+    def width(self, value: int):
+        if self._width != value:
+            self._width = value
+            self.set_dirty()
+
+    @property
+    def height(self) -> int:
+        return self._height
+
+    @height.setter
+    def height(self, value: int):
+        if self._height != value:
+            self._height = value
+            self.set_dirty()
+
+    @property
+    def padding(self) -> int:
+        return self._padding
+
+    @padding.setter
+    def padding(self, value: int):
+        if self._padding != value:
+            self._padding = value
+            self.set_dirty()
 
     def get_height(self) -> int:
         return self.height
@@ -380,19 +488,37 @@ class Box(BaseComponent):
         return (py + offset, px + offset)
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
+        ay, ax = self.get_absolute_pos()
+
         try:
-            ay, ax = self.get_absolute_pos()
             eff = self.get_effective_style()
 
-            # 1. 清理区域（含合成层）并填充背景
+            # 2. 清理区域（含合成层）并填充背景
+            # 注意：清理区域不应该受自身裁剪限制（否则无法清理溢出内容）
             engine.clear_rect(ay, ax, self.height, self.width, style=eff)
             if self.background_char != " ":
                 engine.fill_rect(ay + 1, ax + 1, self.height - 2, self.width - 2, self.background_char, eff)
 
-            # 2. 绘制边框
+            # 3. 绘制边框
             engine.draw_box(ay, ax, self.height, self.width, eff, self.border_style)
 
-            super().draw(engine)
+            # 4. 开启裁剪 (针对子组件)
+            if self.clipping:
+                # 容器通常只裁剪内容区：扣除边框 (1)
+                engine.push_clip(ay + 1, ax + 1, self.height - 2, self.width - 2)
+
+            # 5. 绘制子组件
+            for child in self.children:
+                if child.visible:
+                    child.draw(engine)
+
+            # 6. 关闭裁剪
+            if self.clipping:
+                engine.pop_clip()
+
         except Exception as e:
             debug_log(f"[{self.__class__.__name__}] Draw failed: {e}")
 
@@ -417,6 +543,8 @@ class Panel(Box):
         layer=0,
         padding=None,
         visible=True,
+        clipping=False,
+        culling=False,
         children=None,
     ):
         from .theme import get_theme
@@ -426,7 +554,6 @@ class Panel(Box):
         res_padding = padding if padding is not None else t.get("padding", 0)
 
         super().__init__(
-
             pos=pos,
             width=width,
             height=height,
@@ -436,6 +563,8 @@ class Panel(Box):
             layer=layer,
             padding=res_padding,
             visible=visible,
+            clipping=clipping,
+            culling=culling,
             children=children,
         )
         self.title = title
@@ -487,6 +616,9 @@ class Label(BaseComponent):
         return get_visual_width(content)
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
         try:
             content = self._text() if callable(self._text) else self._text
             if self._width is not None and self.align != "left":
@@ -572,6 +704,9 @@ class Text(BaseComponent):
         return max(self._visual_lines) if self._visual_lines else 0
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
         try:
             self._update_cache()
             ay, ax = self.get_absolute_pos()
@@ -642,6 +777,9 @@ class ProgressBar(BaseComponent):
         return self.width
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
         try:
             v = max(0.0, min(1.0, self._value() if callable(self._value) else self._value))
             ay, ax = self.get_absolute_pos()
@@ -687,6 +825,9 @@ class LogView(BaseComponent):
             self._lines.pop(0)
 
     def draw(self, engine):
+        if not self.visible or self._should_cull(engine):
+            return
+
         try:
             ay, ax = self.get_absolute_pos()
             eff = self.get_effective_style()
@@ -733,17 +874,61 @@ class VStack(BaseComponent):
         style=None,
         layer=0,
         visible=True,
+        clipping=False,
+        culling=False,
         children=None,
     ):
-        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
-        self.gap = gap
-        self.align = align
-        self.reverse = reverse
+        super().__init__(
+            pos=pos, 
+            style=style, 
+            layer=layer, 
+            visible=visible, 
+            clipping=clipping,
+            culling=culling,
+            children=children
+        )
+        self._gap = gap
+        self._align = align
+        self._reverse = reverse
+
+    @property
+    def gap(self) -> int:
+        return self._gap
+
+    @gap.setter
+    def gap(self, value: int):
+        if self._gap != value:
+            self._gap = value
+            self.set_dirty()
+
+    @property
+    def align(self) -> str:
+        return self._align
+
+    @align.setter
+    def align(self, value: str):
+        if self._align != value:
+            self._align = value
+            self.set_dirty()
+
+    @property
+    def reverse(self) -> bool:
+        return self._reverse
+
+    @reverse.setter
+    def reverse(self, value: bool):
+        if self._reverse != value:
+            self._reverse = value
+            self.set_dirty()
 
     def get_child_origin(self, child: "BaseComponent") -> tuple:
         py, px = self.get_absolute_pos()
         ordered = list(reversed(self.children)) if self.reverse else self.children
-        idx = ordered.index(child)
+        try:
+            idx = ordered.index(child)
+        except ValueError:
+            return (py, px)
+            
         row = sum(c.get_height() + self.gap for c in ordered[:idx])
         col_offset = 0
         if self.align != "left":
@@ -786,17 +971,61 @@ class HStack(BaseComponent):
         style=None,
         layer=0,
         visible=True,
+        clipping=False,
+        culling=False,
         children=None,
     ):
-        super().__init__(pos=pos, style=style, layer=layer, visible=visible, children=children)
-        self.gap = gap
-        self.align = align
-        self.reverse = reverse
+        super().__init__(
+            pos=pos, 
+            style=style, 
+            layer=layer, 
+            visible=visible, 
+            clipping=clipping,
+            culling=culling,
+            children=children
+        )
+        self._gap = gap
+        self._align = align
+        self._reverse = reverse
+
+    @property
+    def gap(self) -> int:
+        return self._gap
+
+    @gap.setter
+    def gap(self, value: int):
+        if self._gap != value:
+            self._gap = value
+            self.set_dirty()
+
+    @property
+    def align(self) -> str:
+        return self._align
+
+    @align.setter
+    def align(self, value: str):
+        if self._align != value:
+            self._align = value
+            self.set_dirty()
+
+    @property
+    def reverse(self) -> bool:
+        return self._reverse
+
+    @reverse.setter
+    def reverse(self, value: bool):
+        if self._reverse != value:
+            self._reverse = value
+            self.set_dirty()
 
     def get_child_origin(self, child: "BaseComponent") -> tuple:
         py, px = self.get_absolute_pos()
         ordered = list(reversed(self.children)) if self.reverse else self.children
-        idx = ordered.index(child)
+        try:
+            idx = ordered.index(child)
+        except ValueError:
+            return (py, px)
+            
         col = sum(c.get_width() + self.gap for c in ordered[:idx])
         row_offset = 0
         if self.align != "top":

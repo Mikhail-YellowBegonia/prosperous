@@ -80,3 +80,20 @@ def debug_log(msg):
     # Log to a file in the project root
     with open("debug.log", "a") as f:
         f.write(str(msg) + "\n")
+
+
+def rect_overlaps(rect1: tuple, rect2: tuple) -> bool:
+    """判断两个矩形区域 (y, x, h, w) 是否存在交集（重叠）。"""
+    y1, x1, h1, w1 = rect1
+    y2, x2, h2, w2 = rect2
+    
+    # 任一维度高度或宽度 <= 0 则无交集
+    if h1 <= 0 or w1 <= 0 or h2 <= 0 or w2 <= 0:
+        return False
+        
+    return not (
+        y1 + h1 <= y2 or  # 1在2上方
+        y2 + h2 <= y1 or  # 2在1上方
+        x1 + w1 <= x2 or  # 1在2左侧
+        x2 + w2 <= x1     # 2在1左侧
+    )
