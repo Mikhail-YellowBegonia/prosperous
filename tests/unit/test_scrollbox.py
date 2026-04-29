@@ -89,6 +89,14 @@ class TestScrollIntoView:
         c.get_width = lambda: 5
         return c
 
+    @staticmethod
+    def _settle(sb, max_steps=200, dt=0.05):
+        """推进动画直到完成或超时。"""
+        for _ in range(max_steps):
+            sb.update(dt)
+            if sb._scroll_anim_y is None and sb._scroll_anim_x is None:
+                break
+
     def test_scroll_into_view_scrolls_down_when_below(self):
         # ScrollBox height=5, padding=0 → viewport_h = 3 (border 1 each side)
         # content_origin at screen row 1
@@ -102,6 +110,7 @@ class TestScrollIntoView:
 
         # item[3] is at content_y=3, viewport is [0, 2] → below viewport
         sb.scroll_into_view(items[3])
+        self._settle(sb)
         # Should scroll so item[3] bottom (4) fits: scroll_y = 4 - 3 = 1
         assert sb.scroll_y == 1
 
@@ -118,6 +127,7 @@ class TestScrollIntoView:
 
         # scroll_into_view item[0] → should scroll up to 0
         sb.scroll_into_view(items[0])
+        self._settle(sb)
         assert sb.scroll_y == 0
 
     def test_scroll_into_view_noop_when_already_visible(self):
@@ -129,8 +139,9 @@ class TestScrollIntoView:
         sb.add_child(vs)
         sb.scroll_y = 1  # items[1..3] visible
 
-        # item[2] is at content_y=2, within [1, 3] → no change
+        # item[2] is at content_y=2, within [1, 3] → no change，不应创建动画
         sb.scroll_into_view(items[2])
+        assert sb._scroll_anim_y is None
         assert sb.scroll_y == 1
 
     def test_focus_manager_triggers_scroll_on_move(self):
@@ -152,5 +163,7 @@ class TestScrollIntoView:
         fm.move_focus("DOWN")
 
         assert fm.get_focused() is items[3]
-        # ScrollBox should have scrolled to show item[3]
+        # 动画已被触发（但尚未推进），验证目标方向正确
+        assert sb._scroll_anim_y is not None
+        self._settle(sb)
         assert sb.scroll_y > 0

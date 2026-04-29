@@ -154,8 +154,8 @@ class RenderEngine:
             pass
 
         self.listen_size()
-        # 全局隐藏硬件光标
-        sys.stdout.write("\033[?25l")
+        # 隐藏硬件光标 + 开启 SGR 鼠标按键上报（含滚轮）
+        sys.stdout.write("\033[?25l\033[?1000h\033[?1006h")
         sys.stdout.flush()
 
     def push_clip(self, y, x, h, w):

@@ -28,11 +28,7 @@
 
 ## 🟡 [Near-term] 待解决（轻量化修复）
 
-### [layout] ScrollBox 滚动约束与反馈
-- 目前 `scroll_y/x` 允许无限滚动，且缺少滚动条视觉反馈。
 
-### [interaction] 动态组件焦点注册
-- `add_child()` 动态添加的组件无法自动进入 `FocusManager`，目前需手动调用 `live.focus.add_component()`。
 
 ---
 

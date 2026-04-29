@@ -72,7 +72,8 @@ def clear_screen():
 
 
 def cleanup(cli_height=24):
-    sys.stdout.write(f"\033[{cli_height + 1};1H\033[0m\n\033[?25h")
+    # 恢复光标 + 关闭鼠标上报
+    sys.stdout.write(f"\033[{cli_height + 1};1H\033[0m\n\033[?25h\033[?1000l\033[?1006l")
     sys.stdout.flush()
 
 

@@ -672,6 +672,8 @@ class ScrollBox(Box):
         )
         self._scroll_x = scroll_x
         self._scroll_y = scroll_y
+        self._scroll_anim_y = None  # Optional[Kinetic]
+        self._scroll_anim_x = None  # Optional[Kinetic]
 
     @property
     def scroll_x(self) -> int:
@@ -722,14 +724,16 @@ class ScrollBox(Box):
         return (py + offset - self.scroll_y, px + offset - self.scroll_x)
 
     def scroll(self, dy: int = 0, dx: int = 0):
-        """移动视点。"""
+        """立即移动视点。若有运行中的动画，取消之以保证按键响应优先。"""
         if dy != 0:
+            self._scroll_anim_y = None
             self.scroll_y += dy
         if dx != 0:
+            self._scroll_anim_x = None
             self.scroll_x += dx
 
     def scroll_into_view(self, component: "BaseComponent"):
-        """调整 scroll_y 使 component 完整出现在可视区域内。"""
+        """调整 scroll_y 使 component 完整出现在可视区域内（动画版）。"""
         box_ay, _ = self.get_absolute_pos()
         content_top = box_ay + 1 + self.padding
         viewport_h = self.height - 2 - 2 * self.padding
@@ -741,9 +745,38 @@ class ScrollBox(Box):
         content_y = comp_abs_y - content_top + self.scroll_y
 
         if content_y < self.scroll_y:
-            self.scroll_y = content_y
+            self.animate_scroll_to(target_y=content_y)
         elif content_y + comp_h > self.scroll_y + viewport_h:
-            self.scroll_y = content_y + comp_h - viewport_h
+            self.animate_scroll_to(target_y=content_y + comp_h - viewport_h)
+
+    def animate_scroll_to(self, target_y: int = None, target_x: int = None):
+        """以动画方式滚动到目标位置。需在主循环中调用 update(dt) 才会推进。
+        若动画已在运行，直接更新目标（保留当前速度，平滑重定向）。
+        """
+        from .animation import Kinetic
+        if target_y is not None:
+            clamped = max(0, min(target_y, max(0, self._get_content_height() - (self.height - 2 - 2 * self.padding))))
+            if self._scroll_anim_y is None:
+                self._scroll_anim_y = Kinetic(float(self._scroll_y), stiffness=250, damping=25)
+            self._scroll_anim_y.set_target(float(clamped))
+        if target_x is not None:
+            clamped = max(0, min(target_x, max(0, self._get_content_width() - (self.width - 2 - 2 * self.padding))))
+            if self._scroll_anim_x is None:
+                self._scroll_anim_x = Kinetic(float(self._scroll_x), stiffness=250, damping=25)
+            self._scroll_anim_x.set_target(float(clamped))
+
+    def update(self, dt: float):
+        """推进滚动动画，应在主循环每帧调用。动画结束后自动清理。"""
+        if self._scroll_anim_y is not None:
+            self._scroll_anim_y.update(dt)
+            self.scroll_y = self._scroll_anim_y.int_value
+            if self._scroll_anim_y.done:
+                self._scroll_anim_y = None
+        if self._scroll_anim_x is not None:
+            self._scroll_anim_x.update(dt)
+            self.scroll_x = self._scroll_anim_x.int_value
+            if self._scroll_anim_x.done:
+                self._scroll_anim_x = None
 
     def handle_input(self, key: str) -> bool:
         """支持方向键滚动。"""

@@ -1,5 +1,147 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 from .components import BaseComponent
+
+
+class FocusLayer:
+    """由同一裁剪容器管辖的可焦点组件集合，是空间导航的基本单元。
+
+    clip_owner is None  → 全局层（组件没有任何 clipping=True 祖先）
+    clip_rect  is None  → 无裁剪边界（全屏可见）
+    """
+
+    def __init__(self, clip_owner: Optional[BaseComponent], clip_rect: Optional[tuple]):
+        self.clip_owner = clip_owner  # clipping=True 的容器；None 表示全局层
+        self.clip_rect = clip_rect    # (y, x, h, w)；None 表示无裁剪
+        self.components: List[BaseComponent] = []
+
+    def __repr__(self) -> str:
+        owner = type(self.clip_owner).__name__ if self.clip_owner else "Global"
+        return f"FocusLayer({owner}, {len(self.components)} comps)"
+
+
+class FocusSpatialIndex:
+    """基于 abs_rect 的分层焦点空间索引。
+
+    将 focusable 组件按其最近 clipping=True 祖先分层，每层构成一个 FocusLayer。
+    同层内所有组件均可参与方向键导航（含当前被裁剪在视口外的组件）；
+    跨层导航由父层逻辑处理，从根本上消除扁平索引在 ScrollBox
+    边界处"无法导航到下一项"的问题。
+
+    用法：
+        idx = FocusSpatialIndex()
+        idx.build(focus_manager._components)
+
+        layer = idx.get_layer(some_button)
+        candidates = [(c, c.get_abs_rect()) for c in layer.components]
+    """
+
+    def __init__(self):
+        self._layers: List[FocusLayer] = []
+        self._comp_to_layer: Dict[BaseComponent, FocusLayer] = {}
+
+    # ── 构建 ──────────────────────────────────────────────────────────────────
+
+    def build(self, components: List[BaseComponent]) -> None:
+        """从 focusable 组件列表重建索引。O(n × depth)，n 为组件数。"""
+        self._layers.clear()
+        self._comp_to_layer.clear()
+
+        owner_to_layer: Dict[Optional[BaseComponent], FocusLayer] = {}
+
+        for comp in components:
+            owner = self._find_clip_ancestor(comp)
+
+            if owner not in owner_to_layer:
+                clip_rect = self._clip_rect_of(owner) if owner is not None else None
+                layer = FocusLayer(clip_owner=owner, clip_rect=clip_rect)
+                owner_to_layer[owner] = layer
+                self._layers.append(layer)
+
+            layer = owner_to_layer[owner]
+            layer.components.append(comp)
+            self._comp_to_layer[comp] = layer
+
+    # ── 查询 ──────────────────────────────────────────────────────────────────
+
+    @property
+    def layers(self) -> List[FocusLayer]:
+        """当前所有层（按 build 时遍历顺序）。"""
+        return list(self._layers)
+
+    def get_layer(self, component: BaseComponent) -> Optional[FocusLayer]:
+        """返回组件所属的层；不在索引中则返回 None。"""
+        return self._comp_to_layer.get(component)
+
+    def find_next(self, current: BaseComponent, direction: str) -> Optional[BaseComponent]:
+        """在 current 所在层内，沿 direction 方向查找最近的焦点候选组件。
+
+        算法：
+          1. 过滤出严格位于正确半平面的候选（中心点坐标比较）
+          2. 以「主轴距离 + 副轴距离 × 2」加权评分，取最小值
+        返回最优候选；同层内无候选则返回 None。
+        """
+        layer = self.get_layer(current)
+        if layer is None or len(layer.components) <= 1:
+            return None
+
+        cy_r, cx_r, ch, cw = current.get_abs_rect()
+        cy = cy_r + ch / 2
+        cx = cx_r + cw / 2
+
+        best: Optional[BaseComponent] = None
+        best_score = float("inf")
+
+        for comp in layer.components:
+            if comp is current:
+                continue
+            ry, rx, rh, rw = comp.get_abs_rect()
+            ey = ry + rh / 2
+            ex = rx + rw / 2
+
+            # 严格半平面过滤
+            if direction == "DOWN" and ey <= cy:
+                continue
+            elif direction == "UP" and ey >= cy:
+                continue
+            elif direction == "RIGHT" and ex <= cx:
+                continue
+            elif direction == "LEFT" and ex >= cx:
+                continue
+
+            # 主轴距离 + 副轴距离加权评分
+            if direction in ("DOWN", "UP"):
+                primary = abs(ey - cy)
+                secondary = abs(ex - cx)
+            else:
+                primary = abs(ex - cx)
+                secondary = abs(ey - cy)
+
+            score = primary + secondary * 2.0
+            if score < best_score:
+                best_score = score
+                best = comp
+
+        return best
+
+    # ── 静态工具 ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _find_clip_ancestor(component: BaseComponent) -> Optional[BaseComponent]:
+        """向上遍历父链，返回最近的 clipping=True 祖先；无则返回 None。"""
+        parent = component.parent
+        while parent is not None:
+            if getattr(parent, "clipping", False):
+                return parent
+            parent = parent.parent
+        return None
+
+    @staticmethod
+    def _clip_rect_of(container: BaseComponent) -> tuple:
+        """计算容器的裁剪矩形，与 Box.draw() 中 push_clip 保持一致。
+        公式：(ay+1, ax+1, h-2, w-2)，即去掉上下左右各一格边框。
+        """
+        ay, ax = container.get_absolute_pos()
+        return (ay + 1, ax + 1, container.get_height() - 2, container.get_width() - 2)
 
 
 class FocusManager:
@@ -24,6 +166,7 @@ class FocusManager:
     def __init__(self):
         self._stack: List[List[BaseComponent]] = [[]]
         self._idx_stack: List[int] = [-1]
+        self._spatial_index: FocusSpatialIndex = FocusSpatialIndex()
 
     # ── 内部访问当前组 ─────────────────────────────────────
 
@@ -112,8 +255,29 @@ class FocusManager:
         return None
 
     def move_focus(self, direction: str):
+        """方向键焦点导航。
+        优先使用空间索引在同层内查找方向候选；若同层无候选则退回线性循环。
+        TAB/SHIFT_TAB 不经此方法，仍走 handle_input 中的线性逻辑。
+        """
         if not self._components:
             return
+
+        current = self.get_focused()
+
+        # ── 阶段一：尝试空间导航 ──────────────────────────────────────────────
+        if current is not None:
+            self._spatial_index.build(self._components)
+            next_comp = self._spatial_index.find_next(current, direction)
+            if next_comp is not None:
+                current.is_focused = False
+                current.on_blur()
+                self._focused_index = self._components.index(next_comp)
+                next_comp.is_focused = True
+                next_comp.on_focus()
+                self._scroll_to_component(next_comp)
+                return
+
+        # ── 阶段二：退回线性循环（无布局信息或边界情况）─────────────────────
         old = self.get_focused()
         if old:
             old.is_focused = False

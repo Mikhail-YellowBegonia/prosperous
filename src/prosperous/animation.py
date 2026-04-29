@@ -75,6 +75,11 @@ class Tween:
         return self.start + (self.end - self.start) * self._easing(self.progress)
 
     @property
+    def int_value(self) -> int:
+        """当前插值结果，四舍五入为整数。适合驱动离散坐标（如 scroll_y、pos）。"""
+        return round(self.value)
+
+    @property
     def done(self) -> bool:
         """动画是否已完成（elapsed >= duration）。"""
         return (time.perf_counter() - self._t0) >= self.duration
@@ -122,6 +127,11 @@ class Kinetic:
     def value(self) -> float:
         """当前的物理模拟值。"""
         return self._current_value
+
+    @property
+    def int_value(self) -> int:
+        """当前模拟值，四舍五入为整数。需先调用 update(dt)。适合驱动离散坐标。"""
+        return round(self._current_value)
 
     @property
     def velocity(self) -> float:

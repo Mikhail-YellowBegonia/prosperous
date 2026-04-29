@@ -84,8 +84,12 @@ class InputHandler:
                 last_byte = buf[-1:]
                 if b"A" <= last_byte <= b"Z" or b"a" <= last_byte <= b"z" or last_byte == b"~":
                     seq = buf.decode("ascii", errors="ignore")
-                    key = self.KEY_MAP.get(seq, f"SEQ({repr(seq)})")
-                    self._emit(key)
+                    # SGR 鼠标事件：\x1b[<btn;col;rowM (按下) 或 m (释放)
+                    if seq.startswith("\x1b[<") and last_byte in (b"M", b"m"):
+                        self._parse_sgr_mouse(seq)
+                    else:
+                        key = self.KEY_MAP.get(seq, f"SEQ({repr(seq)})")
+                        self._emit(key)
                     self.buffer = b""
             return
 
@@ -96,6 +100,21 @@ class InputHandler:
             except:
                 pass
             self.buffer = b""
+
+    def _parse_sgr_mouse(self, seq: str):
+        """解析 SGR 鼠标序列并映射到按键事件。
+        当前仅处理滚轮（btn=64 上滚 → UP，btn=65 下滚 → DOWN）。
+        """
+        try:
+            # seq 形如 "\x1b[<64;5;10M"，去掉前缀 \x1b[< 和末尾 M/m
+            inner = seq[3:-1]
+            btn = int(inner.split(";")[0])
+            if btn == 64:
+                self._emit("UP")
+            elif btn == 65:
+                self._emit("DOWN")
+        except (ValueError, IndexError):
+            pass
 
     def _emit(self, key):
         if not key:
