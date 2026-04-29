@@ -378,13 +378,15 @@ class TestLogViewBuffer:
         for col in range(10):
             assert cell_char(engine, 1, col) == " "
 
-    def test_long_line_truncated_with_ellipsis(self, engine):
+    def test_long_line_wrapped(self, engine):
         lv = LogView(pos=(0, 0), width=10, height=3)
         lv.append("a" * 20)  # far exceeds width
         lv.draw(engine)
-        # The row should contain '…' as the last non-space char in truncation area
-        row_content = row_chars(engine, 0, 0, 10)
-        assert "…" in row_content
+        # Should wrap into two lines of 10 'a's
+        row0 = row_chars(engine, 0, 0, 10)
+        row1 = row_chars(engine, 1, 0, 10)
+        assert row0 == "a" * 10
+        assert row1 == "a" * 10
 
     def test_positioned_log_draws_at_correct_offset(self, engine):
         lv = LogView(pos=(5, 3), width=15, height=3)

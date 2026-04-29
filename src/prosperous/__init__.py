@@ -16,6 +16,7 @@ from .components import (
     LogView,
     VStack,
     HStack,
+    ScrollBox,
 )
 from .interaction import FocusManager
 from .styles import Style, DEFAULT_STYLE, BOX_SINGLE, BOX_DOUBLE

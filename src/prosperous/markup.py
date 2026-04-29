@@ -2,6 +2,66 @@ import re
 from typing import List, Tuple, Optional
 from .styles import Style, DEFAULT_STYLE
 from .theme import get_theme
+from .utils import get_visual_width
+
+def wrap_segments(segments: List[Tuple[str, Style]], width: int) -> List[List[Tuple[str, Style]]]:
+    """
+    将一组富文本片段 (text, style) 根据宽度折行。
+    
+    参数:
+        segments: 格式为 [(text, style), ...]
+        width: 最大视觉宽度限制。
+        
+    返回:
+        List[List[Tuple[str, Style]]]: 折行后的多行片段列表。
+    """
+    if width <= 0:
+        return [segments]
+        
+    lines = []
+    current_line = []
+    current_width = 0
+    
+    for text, style in segments:
+        if not text:
+            continue
+            
+        style = style or DEFAULT_STYLE
+        
+        # 逐字符处理以支持精确折行
+        pending_text = ""
+        for char in text:
+            char_w = get_visual_width(char)
+            
+            # 如果加上这个字符就超宽了
+            if current_width + char_w > width:
+                # 提交当前行
+                if pending_text:
+                    current_line.append((pending_text, style))
+                if current_line:
+                    lines.append(current_line)
+                
+                # 重置新行
+                current_line = []
+                current_width = 0
+                pending_text = ""
+                
+                # 如果单个字符就比总宽度还宽（极窄容器），也得强行放下
+                if char_w > width:
+                    lines.append([(char, style)])
+                    continue
+
+            pending_text += char
+            current_width += char_w
+            
+        # 段落处理完后，将剩余部分加入当前行
+        if pending_text:
+            current_line.append((pending_text, style))
+            
+    if current_line:
+        lines.append(current_line)
+        
+    return lines if lines else [[]]
 
 class MarkupParser:
     """Prosperous 标记解析器。

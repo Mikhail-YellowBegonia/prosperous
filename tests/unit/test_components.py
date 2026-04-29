@@ -30,7 +30,7 @@ Covers:
     - handle_input ENTER calls focused.on_enter
     - handle_input direction delegates to move_focus
     - handle_input other key calls on_key then handle_input
-    - handle_input on_key returning False suppresses handle_input
+    - handle_input on_key returning True suppresses handle_input
     - push_group: bottom layer blurred, new group focused
     - pop_group: restores previous focus
     - pop_group on single-layer stack is no-op
@@ -67,7 +67,7 @@ class _MockComponent(BaseComponent):
         self.enter_calls = 0
         self.handle_calls: list = []
         self.key_calls: list = []
-        self._key_return = None  # set to False to suppress handle_input
+        self._key_return = None  # set to True to suppress handle_input
 
     def on_focus(self):
         self.focus_calls += 1
@@ -177,53 +177,59 @@ class TestInputBoxHandleInput:
 
 
 class TestLogViewAppend:
-    def _lv(self, height=5, width=40):
-        return LogView(pos=(0, 0), width=width, height=height)
+    def _lv(self, height=5, width=40, **kwargs):
+        return LogView(pos=(0, 0), width=width, height=height, **kwargs)
 
     def test_single_message_stored(self):
         lv = self._lv()
         lv.append("hello")
-        assert lv._lines == ["hello"]
+        # _buffer 存储的是 List[List[Tuple[str, Style]]]
+        assert len(lv._buffer) == 1
+        assert lv._buffer[0][0][0] == "hello"
 
     def test_multiple_messages_up_to_capacity(self):
         lv = self._lv(height=3)
         lv.append("a")
         lv.append("b")
         lv.append("c")
-        assert lv._lines == ["a", "b", "c"]
+        assert len(lv._buffer) == 3
+        assert [line[0][0] for line in lv._buffer] == ["a", "b", "c"]
 
     def test_oldest_dropped_when_over_capacity(self):
-        lv = self._lv(height=3)
+        # 注意：现在最大容量由 max_lines 控制，默认 1000
+        lv = self._lv(height=3, max_lines=3)
         lv.append("a")
         lv.append("b")
         lv.append("c")
         lv.append("d")
-        assert lv._lines == ["b", "c", "d"]
-        assert len(lv._lines) == 3
+        assert len(lv._buffer) == 3
+        assert [line[0][0] for line in lv._buffer] == ["b", "c", "d"]
 
-    def test_many_messages_only_last_height_kept(self):
-        lv = self._lv(height=4)
+    def test_many_messages_only_last_n_kept(self):
+        lv = self._lv(height=4, max_lines=4)
         for i in range(10):
             lv.append(str(i))
-        assert lv._lines == ["6", "7", "8", "9"]
+        assert [line[0][0] for line in lv._buffer] == ["6", "7", "8", "9"]
 
     def test_exactly_at_capacity_does_not_drop(self):
-        lv = self._lv(height=5)
+        lv = self._lv(height=5, max_lines=5)
         for i in range(5):
             lv.append(str(i))
-        assert len(lv._lines) == 5
-        assert lv._lines[0] == "0"
+        assert len(lv._buffer) == 5
+        assert lv._buffer[0][0][0] == "0"
 
     def test_height_1_keeps_only_last(self):
-        lv = self._lv(height=1)
+        # height=1, max_lines=1
+        lv = self._lv(height=1, max_lines=1)
         lv.append("first")
         lv.append("second")
-        assert lv._lines == ["second"]
+        assert lv._buffer[0][0][0] == "second"
 
     def test_empty_string_can_be_appended(self):
         lv = self._lv()
         lv.append("")
-        assert lv._lines == [""]
+        # Empty string should result in an empty line (or empty list of segments)
+        assert len(lv._buffer) == 1
 
 
 # ===========================================================================
@@ -336,10 +342,10 @@ class TestFocusManagerInputDispatch:
         assert "a" in c.key_calls
         assert "a" in c.handle_calls
 
-    def test_handle_input_on_key_false_suppresses_handle_input(self):
+    def test_handle_input_on_key_true_suppresses_handle_input(self):
         fm = FocusManager()
         c = _MockComponent()
-        c._key_return = False
+        c._key_return = True
         fm.add_component(c)
         fm.handle_input("x")
         assert "x" in c.key_calls
@@ -434,3 +440,102 @@ class TestFocusManagerStack:
         fm.pop_group()
         # After pop, c1's layer should be intact
         assert fm.get_focused() is c1
+
+
+class TestFocusManagerRemove:
+    def test_remove_non_focused_component(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.remove_component(c2)
+        assert c2 not in fm._components
+        assert fm.get_focused() is c1  # focus unchanged
+
+    def test_remove_focused_component_transfers_focus(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.remove_component(c1)  # c1 had focus
+        assert c1 not in fm._components
+        assert fm.get_focused() is c2
+        assert c2.is_focused is True
+        assert c1.is_focused is False
+        assert c1.blur_calls == 1
+
+    def test_remove_focused_last_component_leaves_empty(self):
+        fm = FocusManager()
+        c = _MockComponent()
+        fm.add_component(c)
+        fm.remove_component(c)
+        assert fm.get_focused() is None
+        assert fm._focused_index == -1
+
+    def test_remove_adjusts_index_when_before_focus(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        c3 = _MockComponent("c3")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.add_component(c3)
+        fm.move_focus("DOWN")  # focus → c2
+        fm.move_focus("DOWN")  # focus → c3
+        fm.remove_component(c1)  # remove before focused c3
+        assert fm.get_focused() is c3  # focus stays on c3
+        assert fm._focused_index == 1  # index adjusted down by 1
+
+    def test_remove_component_not_in_group_is_noop(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        fm.add_component(c1)
+        fm.remove_component(c2)  # c2 was never added
+        assert fm.get_focused() is c1
+
+
+class TestRootLifecycle:
+    def test_remove_child_clears_root_on_subtree(self):
+        """remove_child 后被移除子树的 _root 应被清空。"""
+        mock_root = object()  # 任意非 None 对象模拟 Live
+
+        parent = BaseComponent()
+        child = BaseComponent()
+        grandchild = BaseComponent()
+        child.add_child(grandchild)
+        parent.add_child(child)
+
+        # 手动设置 _root（模拟已挂载到引擎）
+        parent._root = mock_root
+        child._root = mock_root
+        grandchild._root = mock_root
+
+        # remove_child 时 _root 需要通过 _detach_component 清理
+        # 但 mock_root 没有 _detach_component，所以我们用真实的方式：
+        # 直接测试 _root 是否为 None 需要一个有 _detach_component 的对象
+        # 改用 unittest.mock
+        from unittest.mock import MagicMock
+        live_mock = MagicMock()
+        parent._root = live_mock
+        child._root = live_mock
+        grandchild._root = live_mock
+
+        parent.remove_child(child)
+
+        live_mock._detach_component.assert_called_once_with(child)
+
+    def test_add_child_calls_attach_when_root_set(self):
+        """add_child 时若父树已挂载，应通知 _root 注册新子树。"""
+        from unittest.mock import MagicMock
+        live_mock = MagicMock()
+
+        parent = BaseComponent()
+        parent._root = live_mock
+
+        child = BaseComponent()
+        parent.add_child(child)
+
+        live_mock._attach_component.assert_called_once_with(child)

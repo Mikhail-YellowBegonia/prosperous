@@ -79,25 +79,34 @@ class Live:
 
     def add(self, component) -> None:
         """注册顶层组件到场景，frame() 时自动绘制。
-        同时递归收集 visible=True 的 focusable 子组件，按声明顺序注册到 live.focus。
-        visible=False 的子树（如隐藏 Modal）整体跳过，不会被误注册。
+        同时递归关联 _root 并收集 visible=True 的 focusable 子组件。
         """
         if component not in self._scene:
             self._scene.append(component)
-            self._collect_focusable(component)
+            self._attach_component(component)
 
-    def _collect_focusable(self, component) -> None:
-        if not component.visible:
-            return
+    def _attach_component(self, component) -> None:
+        """递归关联引擎根引用并注册焦点。用于支持动态 add_child。"""
+        component._root = self
+        if component.visible:
+            if component.focusable:
+                self.focus.add_component(component)
+            for child in component.children:
+                self._attach_component(child)
+
+    def _detach_component(self, component) -> None:
+        """递归清理 _root 引用并从焦点系统注销。"""
+        component._root = None
         if component.focusable:
-            self.focus.add_component(component)
+            self.focus.remove_component(component)
         for child in component.children:
-            self._collect_focusable(child)
+            self._detach_component(child)
 
     def remove(self, component) -> None:
         """从场景中移除组件，下一帧起不再绘制。组件本身不会被销毁，可重新 add()。"""
         try:
             self._scene.remove(component)
+            self._detach_component(component)
         except ValueError:
             pass
 

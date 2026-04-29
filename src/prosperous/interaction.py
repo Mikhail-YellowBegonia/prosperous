@@ -78,6 +78,27 @@ class FocusManager:
             restored.is_focused = True
             restored.on_focus()
 
+    def remove_component(self, component: BaseComponent):
+        """从当前焦点组移除组件。若该组件持有焦点，自动将焦点移交给后继。"""
+        if component not in self._components:
+            return
+        idx = self._components.index(component)
+        was_focused = (idx == self._focused_index)
+        if was_focused:
+            component.is_focused = False
+            component.on_blur()
+        self._components.remove(component)
+        if not self._components:
+            self._focused_index = -1
+        elif was_focused:
+            self._focused_index = min(idx, len(self._components) - 1)
+            new = self.get_focused()
+            if new:
+                new.is_focused = True
+                new.on_focus()
+        elif idx < self._focused_index:
+            self._focused_index -= 1
+
     def clear(self):
         """清空当前焦点组（不影响栈中其他层）。"""
         for c in self._components:
@@ -105,16 +126,39 @@ class FocusManager:
         if new:
             new.is_focused = True
             new.on_focus()
+            self._scroll_to_component(new)
+
+    def _scroll_to_component(self, component: BaseComponent):
+        """向上遍历父链，找到最近的 ScrollBox 祖先并要求其将 component 滚入视野。"""
+        p = component.parent
+        while p is not None:
+            if hasattr(p, "scroll_into_view"):
+                p.scroll_into_view(component)
+                break
+            p = p.parent
 
     def handle_input(self, key: str):
         focused = self.get_focused()
         if not focused:
             return
+
+        # 1. 优先级最高：TAB 键强制切换焦点（不受组件拦截影响）
+        if key == "TAB":
+            self.move_focus("DOWN")
+            return
+        if key == "SHIFT_TAB": # 部分终端支持
+            self.move_focus("UP")
+            return
+
+        # 2. 拦截层：让组件优先处理（包括方向键、ENTER 等）
+        if focused.on_key(key):
+            return
+            
+        if focused.handle_input(key):
+            return
+
+        # 3. 默认行为层：如果组件没处理，则执行全局行为
         if key in ["UP", "DOWN", "LEFT", "RIGHT"]:
             self.move_focus(key)
         elif key == "ENTER":
             focused.on_enter()
-        else:
-            result = focused.on_key(key)
-            if result is not False:
-                focused.handle_input(key)
