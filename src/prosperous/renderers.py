@@ -4,8 +4,12 @@ from .styles import Style
 # 盲文点位到 bit 的映射（标准 Unicode 盲文编码）
 # 排列：左列从上到下 bit0/1/2，右列从上到下 bit3/4/5，第4行左右 bit6/7（仅8点）
 _BRAILLE_DOT_MAP_6 = [
-    (0, 0, 1), (1, 0, 2), (2, 0, 4),
-    (0, 1, 8), (1, 1, 16), (2, 1, 32),
+    (0, 0, 1),
+    (1, 0, 2),
+    (2, 0, 4),
+    (0, 1, 8),
+    (1, 1, 16),
+    (2, 1, 32),
 ]
 _BRAILLE_DOT_MAP_8 = _BRAILLE_DOT_MAP_6 + [(3, 0, 64), (3, 1, 128)]
 
@@ -59,8 +63,9 @@ class BinmapImageRenderer:
         self.renderer = BinmapRenderer(self.matrix, fg=self.fg)
 
     def draw(self, start_y, start_x, engine, layer=0):
-        self.renderer.draw(start_y, start_x,
-                           lambda y, x, c, fg: engine.push_binmap(y, x, c, fg, layer=layer))
+        self.renderer.draw(
+            start_y, start_x, lambda y, x, c, fg: engine.push_binmap(y, x, c, fg, layer=layer)
+        )
 
 
 class BinmapColorRenderer:
@@ -85,17 +90,15 @@ class BinmapColorRenderer:
     def draw(self, start_y, start_x, push_binmap_func):
         for y in range(0, self.height, 2):
             for x in range(0, self.width, 2):
-                tl = self.matrix[y][x]     if y < self.height and x < self.width         else 0
-                tr = self.matrix[y][x + 1] if y < self.height and x + 1 < self.width     else 0
-                bl = self.matrix[y + 1][x] if y + 1 < self.height and x < self.width     else 0
+                tl = self.matrix[y][x] if y < self.height and x < self.width else 0
+                tr = self.matrix[y][x + 1] if y < self.height and x + 1 < self.width else 0
+                bl = self.matrix[y + 1][x] if y + 1 < self.height and x < self.width else 0
                 br = self.matrix[y + 1][x + 1] if y + 1 < self.height and x + 1 < self.width else 0
                 index = (1 if tl else 0) | (2 if tr else 0) | (4 if bl else 0) | (8 if br else 0)
                 if self.skip_empty and index == 0:
                     continue
                 fg, bg = self.block_colors.get((y // 2, x // 2), (None, None))
-                push_binmap_func(
-                    start_y + y // 2, start_x + x // 2, self.CHAR_MAP[index], fg, bg
-                )
+                push_binmap_func(start_y + y // 2, start_x + x // 2, self.CHAR_MAP[index], fg, bg)
 
 
 class BinmapColorImageRenderer:
@@ -117,8 +120,7 @@ class BinmapColorImageRenderer:
 
         # 二值矩阵：与 BinmapImageRenderer 保持一致（>0 阈值）
         self.matrix = [
-            [1 if (px[x, y][3] > 0 and sum(px[x, y][:3]) > 0) else 0
-             for x in range(pixel_w)]
+            [1 if (px[x, y][3] > 0 and sum(px[x, y][:3]) > 0) else 0 for x in range(pixel_w)]
             for y in range(pixel_h)
         ]
 
@@ -136,7 +138,7 @@ class BinmapColorImageRenderer:
                         r, g, b, a = px[ppx, py]
                         if self.matrix[py][ppx]:
                             lit.append((r, g, b))
-                        elif a > 0:          # 仅不透明的暗像素贡献 bg
+                        elif a > 0:  # 仅不透明的暗像素贡献 bg
                             dark.append((r, g, b))
                 fg = _avg_rgb(lit) if lit else None
                 bg = _avg_rgb(dark) if dark else None
@@ -145,16 +147,21 @@ class BinmapColorImageRenderer:
         self.renderer = BinmapColorRenderer(self.matrix, self.block_colors)
 
     def draw(self, start_y, start_x, engine, layer=0):
-        self.renderer.draw(start_y, start_x,
-                           lambda y, x, c, fg, bg=None: engine.push_binmap(y, x, c, fg, bg, layer))
+        self.renderer.draw(
+            start_y,
+            start_x,
+            lambda y, x, c, fg, bg=None: engine.push_binmap(y, x, c, fg, bg, layer),
+        )
 
 
 def _avg_rgb(pixels):
     """sRGB 直接平均，返回 (R, G, B) 整数元组。"""
     n = len(pixels)
-    return (sum(p[0] for p in pixels) // n,
-            sum(p[1] for p in pixels) // n,
-            sum(p[2] for p in pixels) // n)
+    return (
+        sum(p[0] for p in pixels) // n,
+        sum(p[1] for p in pixels) // n,
+        sum(p[2] for p in pixels) // n,
+    )
 
 
 class BrailleColorRenderer:
@@ -228,8 +235,9 @@ class BrailleColorImageRenderer:
         self.renderer = BrailleColorRenderer(self.matrix, self.block_fg, dots=dots)
 
     def draw(self, start_y, start_x, engine, layer=0):
-        self.renderer.draw(start_y, start_x,
-                           lambda y, x, bits, fg: engine.push_braille(y, x, bits, fg, layer))
+        self.renderer.draw(
+            start_y, start_x, lambda y, x, bits, fg: engine.push_braille(y, x, bits, fg, layer)
+        )
 
 
 class ImageRenderer:
@@ -374,5 +382,6 @@ class BrailleImageRenderer:
         self.renderer = BrailleRenderer(self.matrix, dots=dots, fg=fg)
 
     def draw(self, start_y, start_x, engine, layer=0):
-        self.renderer.draw(start_y, start_x,
-                           lambda y, x, bits, fg: engine.push_braille(y, x, bits, fg, layer))
+        self.renderer.draw(
+            start_y, start_x, lambda y, x, bits, fg: engine.push_braille(y, x, bits, fg, layer)
+        )

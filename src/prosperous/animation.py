@@ -146,18 +146,18 @@ class Kinetic:
         """执行一个物理步进。基于临界阻尼弹簧算法。"""
         if dt <= 0:
             return
-            
+
         # 弹簧物理公式：
         # F_spring = stiffness * (target - current)
         # F_damper = damping * velocity
         # a = F_spring - F_damper (假设质量 m=1)
-        
+
         displacement = self._current_value - self._target_value
         spring_force = -self.stiffness * displacement
         damper_force = -self.damping * self._velocity
-        
+
         acceleration = spring_force + damper_force
-        
+
         # 简单的 Euler 积分（对 UI 动画足够稳定且计算开销极低）
         self._velocity += acceleration * dt
         self._current_value += self._velocity * dt

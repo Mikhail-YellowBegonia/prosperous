@@ -436,9 +436,8 @@ class TestFocusManagerStack:
         fm.push_group([c2])
         fm.clear()  # clears group containing c2
 
-        assert len(fm._stack) == 2  # stack layers intact
+        assert len(fm._modal_stack) == 1  # modal stack intact
         fm.pop_group()
-        # After pop, c1's layer should be intact
         assert fm.get_focused() is c1
 
 
@@ -472,7 +471,7 @@ class TestFocusManagerRemove:
         fm.add_component(c)
         fm.remove_component(c)
         assert fm.get_focused() is None
-        assert fm._focused_index == -1
+        assert fm._focused is None
 
     def test_remove_adjusts_index_when_before_focus(self):
         fm = FocusManager()
@@ -486,7 +485,6 @@ class TestFocusManagerRemove:
         fm.move_focus("DOWN")  # focus → c3
         fm.remove_component(c1)  # remove before focused c3
         assert fm.get_focused() is c3  # focus stays on c3
-        assert fm._focused_index == 1  # index adjusted down by 1
 
     def test_remove_component_not_in_group_is_noop(self):
         fm = FocusManager()
@@ -498,9 +496,11 @@ class TestFocusManagerRemove:
 
 
 class TestRootLifecycle:
-    def test_remove_child_clears_root_on_subtree(self):
-        """remove_child 后被移除子树的 _root 应被清空。"""
-        mock_root = object()  # 任意非 None 对象模拟 Live
+    def test_remove_child_clears_notifier_on_subtree(self):
+        """remove_child 后被移除子树的 _notifier 应被清空。"""
+        from unittest.mock import MagicMock
+
+        notifier = MagicMock()
 
         parent = BaseComponent()
         child = BaseComponent()
@@ -508,34 +508,174 @@ class TestRootLifecycle:
         child.add_child(grandchild)
         parent.add_child(child)
 
-        # 手动设置 _root（模拟已挂载到引擎）
-        parent._root = mock_root
-        child._root = mock_root
-        grandchild._root = mock_root
-
-        # remove_child 时 _root 需要通过 _detach_component 清理
-        # 但 mock_root 没有 _detach_component，所以我们用真实的方式：
-        # 直接测试 _root 是否为 None 需要一个有 _detach_component 的对象
-        # 改用 unittest.mock
-        from unittest.mock import MagicMock
-        live_mock = MagicMock()
-        parent._root = live_mock
-        child._root = live_mock
-        grandchild._root = live_mock
+        parent._notifier = notifier
+        child._notifier = notifier
+        grandchild._notifier = notifier
 
         parent.remove_child(child)
 
-        live_mock._detach_component.assert_called_once_with(child)
+        notifier.on_detach.assert_called_once_with(child)
 
-    def test_add_child_calls_attach_when_root_set(self):
-        """add_child 时若父树已挂载，应通知 _root 注册新子树。"""
+    def test_add_child_calls_attach_when_notifier_set(self):
+        """add_child 时若父树已挂载，应通知 _notifier 注册新子树。"""
         from unittest.mock import MagicMock
-        live_mock = MagicMock()
+
+        notifier = MagicMock()
 
         parent = BaseComponent()
-        parent._root = live_mock
+        parent._notifier = notifier
 
         child = BaseComponent()
         parent.add_child(child)
 
-        live_mock._attach_component.assert_called_once_with(child)
+        notifier.on_attach.assert_called_once_with(child)
+
+
+class TestFocusManagerTree:
+    def test_tab_walks_tree_in_dfs_order(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        c3 = _MockComponent("c3")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.add_component(c3)
+
+        assert fm.get_focused() is c1
+        fm.handle_input("TAB")
+        assert fm.get_focused() is c2
+        fm.handle_input("TAB")
+        assert fm.get_focused() is c3
+        fm.handle_input("TAB")
+        assert fm.get_focused() is c1
+
+    def test_shift_tab_walks_tree_backward(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        c3 = _MockComponent("c3")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.add_component(c3)
+
+        assert fm.get_focused() is c1
+        fm.handle_input("SHIFT_TAB")
+        assert fm.get_focused() is c3
+        fm.handle_input("SHIFT_TAB")
+        assert fm.get_focused() is c2
+
+    def test_arrow_down_fallback_wraps_via_tree(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        fm.add_component(c1)
+        fm.add_component(c2)
+
+        fm.move_focus("DOWN")  # c1 → c2 (spatial or linear)
+        fm.move_focus("DOWN")  # wraps to c1
+        assert fm.get_focused() is c1
+
+    def test_arrow_up_fallback_wraps_via_tree(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        fm.add_component(c1)
+        fm.add_component(c2)
+
+        fm.move_focus("UP")  # wraps from c1 to c2
+        assert fm.get_focused() is c2
+
+    def test_remove_transfers_focus_to_prev_sibling_in_tree(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        c3 = _MockComponent("c3")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.add_component(c3)
+
+        fm.handle_input("TAB")  # → c2
+        fm.remove_component(c2)
+        assert fm.get_focused() is c3  # transfer to next sibling
+
+    def test_remove_transfers_focus_to_next_sibling_in_tree(self):
+        fm = FocusManager()
+        c1 = _MockComponent("c1")
+        c2 = _MockComponent("c2")
+        c3 = _MockComponent("c3")
+        fm.add_component(c1)
+        fm.add_component(c2)
+        fm.add_component(c3)
+
+        fm.handle_input("TAB")  # → c2
+        fm.remove_component(c1)
+        assert fm.get_focused() is c2
+
+    def test_add_child_after_register_inserts_in_correct_dfs_position(self):
+        """动态添加子组件后，TAB 顺序符合 DFS 树序。"""
+        parent = BaseComponent()
+        parent.focusable = True
+        child_a = BaseComponent()
+        child_a.focusable = True
+        child_b = BaseComponent()
+        child_b.focusable = True
+
+        parent.add_child(child_a)
+        sibling = BaseComponent()
+        sibling.focusable = True
+
+        fm = FocusManager()
+        fm.add_component(parent)  # parent → auto-registers children
+        for c in parent.children:
+            if c.focusable:
+                fm.add_component(c)
+        fm.add_component(sibling)
+
+        # DFS order: parent, child_a, sibling
+        assert fm.get_focused() is parent
+        fm.handle_input("TAB")
+        assert fm.get_focused() is child_a
+        fm.handle_input("TAB")
+        assert fm.get_focused() is sibling
+
+        # Now dynamically add child_b to parent
+        parent.add_child(child_b)
+        fm.add_component(child_b)
+        # DFS order should be: parent, child_a, child_b, sibling
+        fm.handle_input("TAB")  # from sibling wraps to parent
+        assert fm.get_focused() is parent
+        fm.handle_input("TAB")
+        assert fm.get_focused() is child_a
+        fm.handle_input("TAB")
+        assert fm.get_focused() is child_b
+
+    def test_tree_structure_reflects_component_parent_chain(self):
+        """FocusNode 树反映组件的父子关系。"""
+        container = BaseComponent()
+        container.focusable = True
+        child = BaseComponent()
+        child.focusable = True
+        container.add_child(child)
+
+        fm = FocusManager()
+        fm.add_component(container)
+        fm.add_component(child)
+
+        child_node = fm._node_map.get(child)
+        assert child_node is not None
+        assert child_node.parent.component is container
+
+    def test_is_focused_setter_calls_on_focus_and_on_blur(self):
+        c = _MockComponent("c")
+        assert c.is_focused is False
+        assert c.focus_calls == 0
+
+        c.is_focused = True
+        assert c.focus_calls == 1
+        assert c.blur_calls == 0
+
+        c.is_focused = False
+        assert c.blur_calls == 1
+
+        c.is_focused = False  # no change, no call
+        assert c.blur_calls == 1

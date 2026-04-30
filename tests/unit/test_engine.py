@@ -281,10 +281,10 @@ class TestDrawBox:
         """draw_box with a custom border string should use those characters."""
         custom_border = "ABCD--||"
         engine.draw_box(0, 0, 4, 6, border=custom_border)
-        assert engine.screen_logic[0][0][0] == "A"   # TL
-        assert engine.screen_logic[0][5][0] == "B"   # TR
-        assert engine.screen_logic[3][0][0] == "C"   # BL
-        assert engine.screen_logic[3][5][0] == "D"   # BR
+        assert engine.screen_logic[0][0][0] == "A"  # TL
+        assert engine.screen_logic[0][5][0] == "B"  # TR
+        assert engine.screen_logic[3][0][0] == "C"  # BL
+        assert engine.screen_logic[3][5][0] == "D"  # BR
         for col in range(1, 5):
             assert engine.screen_logic[0][col][0] == "-"
         for row in range(1, 3):
@@ -315,9 +315,9 @@ class TestDrawBox:
     def test_positioned_box(self, engine):
         """draw_box at a non-zero origin positions corners correctly."""
         engine.draw_box(3, 5, 4, 6)
-        assert engine.screen_logic[3][5][0] == BOX_SINGLE[0]   # TL
+        assert engine.screen_logic[3][5][0] == BOX_SINGLE[0]  # TL
         assert engine.screen_logic[3][10][0] == BOX_SINGLE[1]  # TR
-        assert engine.screen_logic[6][5][0] == BOX_SINGLE[2]   # BL
+        assert engine.screen_logic[6][5][0] == BOX_SINGLE[2]  # BL
         assert engine.screen_logic[6][10][0] == BOX_SINGLE[3]  # BR
 
     def test_default_border_is_box_single(self, engine):
@@ -446,6 +446,7 @@ class TestEngineDrawingPrimitives:
     def test_write_markup(self, engine):
         """write should correctly parse and apply markup styles."""
         from prosperous import Style
+
         engine.write(0, 0, "<bold>Bold</>")
         assert engine.screen_logic[0][0][0] == "B"
         assert engine.screen_logic[0][0][1].bold is True

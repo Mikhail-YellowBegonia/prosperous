@@ -61,11 +61,11 @@ class TestLazyAABB:
         child = BaseComponent(pos=(0, 0))
         box.add_child(child)
 
-        assert child.get_abs_rect() == (2, 2, 1, 1) # border(1) + padding(1)
-        
+        assert child.get_abs_rect() == (2, 2, 1, 1)  # border(1) + padding(1)
+
         box.padding = 2
         assert child._needs_update is True
-        assert child.get_abs_rect() == (3, 3, 1, 1) # border(1) + padding(2)
+        assert child.get_abs_rect() == (3, 3, 1, 1)  # border(1) + padding(2)
 
 
 class TestCulling:

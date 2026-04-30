@@ -120,10 +120,10 @@ class RenderEngine:
         self.cli_height = 24
 
         # Primary Buffers
-        self.screen_logic = []    # Logic 线程私有缓冲区 (无锁写入)
+        self.screen_logic = []  # Logic 线程私有缓冲区 (无锁写入)
         self.screen_prepare = []  # 待交换缓冲区 (持锁提交)
-        self.screen_buffer = []   # 渲染线程读取缓冲区
-        self.screen_dump = []     # 差分对比缓冲区
+        self.screen_buffer = []  # 渲染线程读取缓冲区
+        self.screen_dump = []  # 差分对比缓冲区
         self.screen_diff = []
 
         # Compositing Spaces
@@ -134,7 +134,7 @@ class RenderEngine:
 
         # Clipping
         self._clip_stack = []
-        self._current_clip = None # (y, x, h, w)
+        self._current_clip = None  # (y, x, h, w)
 
         # Input State
         self.last_key = None
@@ -172,7 +172,7 @@ class RenderEngine:
             nh = max(0, ny_end - ny)
             nw = max(0, nx_end - nx)
             new_clip = (ny, nx, nh, nw)
-        
+
         self._clip_stack.append(self._current_clip)
         self._current_clip = new_clip
 
@@ -242,7 +242,7 @@ class RenderEngine:
 
     def clear_rect(self, y, x, height, width, style=None):
         """清理屏幕指定区域。
-        
+
         该操作会同时填充私有缓冲区 (screen_logic) 和重置高分辨率层 (image_space)。
         建议组件在 draw() 开始时调用，以实现类似“层级刷新”的效果。
         """
@@ -301,7 +301,7 @@ class RenderEngine:
             if curr_x >= limit_x:
                 break
             width = 2 if ord(char) > 128 and not (0x2500 <= ord(char) <= 0x259F) else 1
-            
+
             if curr_x >= start_x:
                 self.screen_logic[y][curr_x] = (char, style)
                 if width == 2:
@@ -409,7 +409,7 @@ class RenderEngine:
             and 0 <= x < len(self.image_space[0])
         ):
             return False
-        
+
         if self._current_clip:
             cy, cx, ch, cw = self._current_clip
             return cy <= y < cy + ch and cx <= x < cx + cw
@@ -458,7 +458,7 @@ class RenderEngine:
         self.dirty_cells.add((y, x))
 
     # layer 优先级常量：相同 layer 时 braille > image > binmap
-    _SPACE_PRIO = {'binmap': 0, 'image': 1, 'braille': 2}
+    _SPACE_PRIO = {"binmap": 0, "image": 1, "braille": 2}
 
     def flush_spaces(self):
         if not self.screen_prepare or not self.image_space:
@@ -469,13 +469,13 @@ class RenderEngine:
             if y >= limit_y or x >= limit_x:
                 continue
 
-            bm  = self.binmap_space[y][x]
+            bm = self.binmap_space[y][x]
             img = self.image_space[y][x]
-            br  = self.braille_space[y][x]
+            br = self.braille_space[y][x]
 
-            bm_valid  = bm  is not None and bm[0] > 0
+            bm_valid = bm is not None and bm[0] > 0
             img_valid = img is not None and (img[0] is not None or img[1] is not None)
-            br_valid  = br  is not None and br[0] > 0
+            br_valid = br is not None and br[0] > 0
 
             # 无冲突快路径（绝大多数情况）
             n = bm_valid + img_valid + br_valid
@@ -494,22 +494,22 @@ class RenderEngine:
             best_key = (-1, -1)
             winner = None
             if bm_valid:
-                k = (bm[3], self._SPACE_PRIO['binmap'])
+                k = (bm[3], self._SPACE_PRIO["binmap"])
                 if k > best_key:
-                    best_key, winner = k, ('binmap', bm)
+                    best_key, winner = k, ("binmap", bm)
             if img_valid:
-                k = (img[2], self._SPACE_PRIO['image'])
+                k = (img[2], self._SPACE_PRIO["image"])
                 if k > best_key:
-                    best_key, winner = k, ('image', img)
+                    best_key, winner = k, ("image", img)
             if br_valid:
-                k = (br[2], self._SPACE_PRIO['braille'])
+                k = (br[2], self._SPACE_PRIO["braille"])
                 if k > best_key:
-                    best_key, winner = k, ('braille', br)
+                    best_key, winner = k, ("braille", br)
 
             wtype, wdata = winner
-            if wtype == 'binmap':
+            if wtype == "binmap":
                 self.push(y, x, self.QUAD_CHAR_MAP[wdata[0]], Style(fg=wdata[1], bg=wdata[2]))
-            elif wtype == 'image':
+            elif wtype == "image":
                 self._flush_image_cell(y, x, wdata)
             else:
                 self.push(y, x, chr(0x2800 | wdata[0]), Style(fg=wdata[1]))

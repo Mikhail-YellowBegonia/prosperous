@@ -5,12 +5,13 @@ from typing import Optional, Union, Tuple
 @dataclass
 class Style:
     """定义文本样式，包括颜色和 ANSI 属性。
-    
+
     支持样式合并：使用 .merge(other) 将高优先级样式（如焦点样式）叠加到基础样式上。
     颜色支持：
         - int: 0-7 (标准), 8-15 (高亮), 16-255 (xterm-256)
         - tuple: (r, g, b) TrueColor 支持
     """
+
     fg: Optional[Union[int, Tuple[int, int, int]]] = None
     bg: Optional[Union[int, Tuple[int, int, int]]] = None
     bold: bool = False

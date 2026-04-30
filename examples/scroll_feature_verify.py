@@ -5,8 +5,17 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from prosperous import (
-    Live, Panel, ScrollBox,
-    VStack, Label, Text, Button, Style, Kinetic, Tween, ease_in_out,
+    Live,
+    Panel,
+    ScrollBox,
+    VStack,
+    Label,
+    Text,
+    Button,
+    Style,
+    Kinetic,
+    Tween,
+    ease_in_out,
     BOX_SINGLE,
 )
 
@@ -32,8 +41,11 @@ class FeatureVerifyApp:
     def __init__(self):
         # ── ScrollBox ──────────────────────────────────────────────────────────
         self.scroll_box = ScrollBox(
-            pos=(3, 5), width=60, height=15,
-            border_style=BOX_SINGLE, padding=1,
+            pos=(3, 5),
+            width=60,
+            height=15,
+            border_style=BOX_SINGLE,
+            padding=1,
             clipping=True,
             focusable=True,
             style=Style(fg=244),

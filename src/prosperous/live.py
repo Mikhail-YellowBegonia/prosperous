@@ -4,6 +4,7 @@ import contextlib
 from .engine import RenderEngine
 from .input_handler import InputHandler
 from .interaction import FocusManager
+from .components import FocusTreeNotifier
 from .utils import cleanup
 
 
@@ -42,6 +43,7 @@ class Live:
     def __enter__(self):
         self.engine = RenderEngine()
         self._input_handler = InputHandler(self.engine)
+        self._notifier = FocusTreeNotifier(self._attach_component, self._detach_component)
 
         self._render_thread = threading.Thread(target=self._render_loop, daemon=True)
         self._input_thread = threading.Thread(target=self._input_handler.listen, daemon=True)
@@ -86,8 +88,8 @@ class Live:
             self._attach_component(component)
 
     def _attach_component(self, component) -> None:
-        """递归关联引擎根引用并注册焦点。用于支持动态 add_child。"""
-        component._root = self
+        """递归关联焦点通知器并注册焦点。用于支持动态 add_child。"""
+        component._notifier = self._notifier
         if component.visible:
             if component.focusable:
                 self.focus.add_component(component)
@@ -95,8 +97,8 @@ class Live:
                 self._attach_component(child)
 
     def _detach_component(self, component) -> None:
-        """递归清理 _root 引用并从焦点系统注销。"""
-        component._root = None
+        """递归清理 _notifier 引用并从焦点系统注销。"""
+        component._notifier = None
         if component.focusable:
             self.focus.remove_component(component)
         for child in component.children:

@@ -84,9 +84,7 @@ class TestBrailleRenderer:
 
         # cy=0, cx=0 → cell (0,0): all 6 dot positions within rows 0-2
         cell_0_0 = next(c for c in cap.calls if c["y"] == 0 and c["x"] == 0)
-        assert cell_0_0["bits"] == 0b00111111, (
-            f"Expected 0b00111111, got {bin(cell_0_0['bits'])}"
-        )
+        assert cell_0_0["bits"] == 0b00111111, f"Expected 0b00111111, got {bin(cell_0_0['bits'])}"
 
     def test_all_ones_6x6_matrix_all_cells_full_6dot(self):
         """A fully lit 6×6 matrix with dots=6 produces bits=0b00111111 for all 6 cells."""

@@ -24,15 +24,15 @@ class TestScrollBox:
         child = BaseComponent(pos=(0, 0))
         child.get_height = lambda: 20
         sb.add_child(child)
-        
+
         # Initial abs pos (no scroll)
         assert child.get_absolute_pos() == (1, 1)
-        
+
         # Scroll down by 5. Content height is 20, viewport is 8. Max scroll is 12.
         sb.scroll_y = 5
         # Child abs pos should move UP relative to screen: 1 - 5 = -4
         assert child.get_absolute_pos() == (-4, 1)
-        
+
         # Scroll right by 2. Content width is 1. Viewport width is 8. Max scroll is 0.
         # To test x-scroll, we need a wide child.
         child.get_width = lambda: 30
@@ -44,10 +44,10 @@ class TestScrollBox:
         child = BaseComponent(pos=(0, 0))
         child.get_height = lambda: 50
         sb.add_child(child)
-        
-        child.get_abs_rect() # Clear flag
+
+        child.get_abs_rect()  # Clear flag
         assert child._needs_update is False
-        
+
         sb.scroll_y = 10
         # Changing scroll should mark child as dirty
         assert child._needs_update is True
@@ -56,13 +56,15 @@ class TestScrollBox:
         # ScrollBox -> VStack -> [C1(h=10), C2(h=10)]
         sb = ScrollBox(pos=(0, 0), width=20, height=5, padding=0)
         vs = VStack(pos=(0, 0))
-        c1 = BaseComponent(); c1.get_height = lambda: 10
-        c2 = BaseComponent(); c2.get_height = lambda: 10
-        
+        c1 = BaseComponent()
+        c1.get_height = lambda: 10
+        c2 = BaseComponent()
+        c2.get_height = lambda: 10
+
         vs.add_child(c1)
         vs.add_child(c2)
         sb.add_child(vs)
-        
+
         # No scroll
         # content_origin = (1, 1)
         # vs abs_pos = (1, 1)
@@ -70,7 +72,7 @@ class TestScrollBox:
         # c2 abs_pos = (1 + 10, 1) = (11, 1)
         assert c1.get_absolute_pos() == (1, 1)
         assert c2.get_absolute_pos() == (11, 1)
-        
+
         # Scroll down by 2. Total content height is 20, viewport is 3.
         sb.scroll_y = 2
         # c1 should move to (1-2, 1) = (-1, 1)

@@ -4,6 +4,20 @@ from .utils import debug_log, get_visual_width, rect_overlaps
 from .markup import parse_markup, wrap_segments
 
 
+class FocusTreeNotifier:
+    __slots__ = ("_attach", "_detach")
+
+    def __init__(self, attach_fn, detach_fn):
+        self._attach = attach_fn
+        self._detach = detach_fn
+
+    def on_attach(self, component):
+        self._attach(component)
+
+    def on_detach(self, component):
+        self._detach(component)
+
+
 class BaseComponent:
     """所有组件的基类。
 
@@ -59,13 +73,13 @@ class BaseComponent:
         self.clipping = clipping
         self.culling = culling
         self.id = id
-        self.is_focused = False
+        self._is_focused = False
         self.parent: Optional["BaseComponent"] = None
         self.children: List["BaseComponent"] = []
-        
-        self._abs_rect = (0, 0, 0, 0) # (y, x, h, w) 缓存
-        self._needs_update = True     # 脏标记
-        self._root = None             # 指向 Live 实例，用于动态注册焦点
+
+        self._abs_rect = (0, 0, 0, 0)  # (y, x, h, w) 缓存
+        self._needs_update = True  # 脏标记
+        self._notifier = None  # FocusTreeNotifier 实例，用于动态注册焦点
 
         if on_enter is not None:
             self.on_enter = on_enter
@@ -101,20 +115,37 @@ class BaseComponent:
         向下传递：所有子组件的绝对位置都会改变。
         向上传递：父容器的布局（如总高度）可能需要重新计算。
         """
-        # 向下传递：必须始终执行，因为即使父组件本身已经是脏的，
-        # 如果是 scroll 改变，子组件的绝对坐标依然需要更新。
         for child in self.children:
             if not child._needs_update:
                 child.set_dirty()
 
         if self._needs_update:
             return
-            
+
         self._needs_update = True
-        
-        # 向上传递
+
         if self.parent:
             self.parent.set_dirty()
+
+    @property
+    def is_focused(self) -> bool:
+        return self._is_focused
+
+    @is_focused.setter
+    def is_focused(self, value: bool):
+        if self._is_focused == value:
+            return
+        self._is_focused = value
+        if value:
+            self.on_focus()
+        else:
+            self.on_blur()
+
+    def get_clip_rect(self) -> Optional[tuple]:
+        if not self.clipping:
+            return None
+        ay, ax = self.get_absolute_pos()
+        return (ay + 1, ax + 1, self.get_height() - 2, self.get_width() - 2)
 
     def on_focus(self):
         """获得焦点时由 FocusManager 调用。可赋值覆盖以添加自定义行为。"""
@@ -144,18 +175,17 @@ class BaseComponent:
         child.parent = self
         self.children.append(child)
         self.children.sort(key=lambda x: x.layer)
-        
-        # 动态注册：如果父树已挂载到引擎，同步更新子树的 root 并注册焦点
-        if self._root:
-            self._root._attach_component(child)
+
+        if self._notifier:
+            self._notifier.on_attach(child)
 
     def remove_child(self, child: "BaseComponent"):
-        """从本组件移除子组件，并清理其子树的 _root 引用和焦点注册。"""
+        """从本组件移除子组件，并清理其子树的 _notifier 引用和焦点注册。"""
         try:
             self.children.remove(child)
             child.parent = None
-            if self._root:
-                self._root._detach_component(child)
+            if self._notifier:
+                self._notifier.on_detach(child)
         except ValueError:
             pass
 
@@ -462,15 +492,15 @@ class Box(BaseComponent):
         from .styles import BOX_SINGLE
 
         super().__init__(
-            pos=pos, 
-            style=style, 
-            layer=layer, 
-            visible=visible, 
+            pos=pos,
+            style=style,
+            layer=layer,
+            visible=visible,
             clipping=clipping,
             culling=culling,
             focus_style=focus_style,
             children=children,
-            **kwargs
+            **kwargs,
         )
         self._width = width
         self._height = height
@@ -532,7 +562,9 @@ class Box(BaseComponent):
         try:
             engine.clear_rect(ay, ax, self.height, self.width, style=eff)
             if self.background_char != " ":
-                engine.fill_rect(ay + 1, ax + 1, self.height - 2, self.width - 2, self.background_char, eff)
+                engine.fill_rect(
+                    ay + 1, ax + 1, self.height - 2, self.width - 2, self.background_char, eff
+                )
         except Exception as e:
             debug_log(f"[{self.__class__.__name__}] Background draw failed: {e}")
 
@@ -754,13 +786,26 @@ class ScrollBox(Box):
         若动画已在运行，直接更新目标（保留当前速度，平滑重定向）。
         """
         from .animation import Kinetic
+
         if target_y is not None:
-            clamped = max(0, min(target_y, max(0, self._get_content_height() - (self.height - 2 - 2 * self.padding))))
+            clamped = max(
+                0,
+                min(
+                    target_y,
+                    max(0, self._get_content_height() - (self.height - 2 - 2 * self.padding)),
+                ),
+            )
             if self._scroll_anim_y is None:
                 self._scroll_anim_y = Kinetic(float(self._scroll_y), stiffness=250, damping=25)
             self._scroll_anim_y.set_target(float(clamped))
         if target_x is not None:
-            clamped = max(0, min(target_x, max(0, self._get_content_width() - (self.width - 2 - 2 * self.padding))))
+            clamped = max(
+                0,
+                min(
+                    target_x,
+                    max(0, self._get_content_width() - (self.width - 2 - 2 * self.padding)),
+                ),
+            )
             if self._scroll_anim_x is None:
                 self._scroll_anim_x = Kinetic(float(self._scroll_x), stiffness=250, damping=25)
             self._scroll_anim_x.set_target(float(clamped))
@@ -807,7 +852,9 @@ class ScrollBox(Box):
         try:
             engine.clear_rect(ay, ax, self.height, self.width, style=eff)
             if self.background_char != " ":
-                engine.fill_rect(ay + 1, ax + 1, self.height - 2, self.width - 2, self.background_char, eff)
+                engine.fill_rect(
+                    ay + 1, ax + 1, self.height - 2, self.width - 2, self.background_char, eff
+                )
         except Exception as e:
             debug_log(f"[{self.__class__.__name__}] Background draw failed: {e}")
 
@@ -848,7 +895,7 @@ class ScrollBox(Box):
 
 class Label(BaseComponent):
     """单行文本标签（轻量版）。支持静态字符串或 lambda，无标记解析。
-    
+
     性能友好，适用于大量简单文本显示的场景。
     """
 
@@ -895,8 +942,8 @@ class Label(BaseComponent):
 
 class Text(BaseComponent):
     """富文本组件。支持多行、对齐、以及类似 HTML 的标记解析。
-    
-    语法示例: 
+
+    语法示例:
         "<#highlight>重点</> 普通文本 <red bold>警告</>"
         支持换行符 `\n` 进行强制换行。
 
@@ -920,33 +967,34 @@ class Text(BaseComponent):
         self._width = width
         self.align = align
         self.markup = markup
-        
+
         # 缓存
         self._last_input = None
-        self._line_segments = [] # List[List[Tuple[str, Style]]]
-        self._visual_lines = []   # List[int] 每行视觉宽度
+        self._line_segments = []  # List[List[Tuple[str, Style]]]
+        self._visual_lines = []  # List[int] 每行视觉宽度
 
     def _update_cache(self):
         content = self._raw_text() if callable(self._raw_text) else self._raw_text
         if content == self._last_input:
             return content
-            
+
         # 内容发生变化，重新解析
         from .markup import parse_markup
+
         eff_style = self.get_effective_style()
-        
+
         if self.markup:
             self._line_segments = parse_markup(content, eff_style)
         else:
             # 非标记模式，视为普通多行文本
-            self._line_segments = [[(line, eff_style)] for line in content.split('\n')]
-            
+            self._line_segments = [[(line, eff_style)] for line in content.split("\n")]
+
         # 计算每一行的总视觉宽度
         self._visual_lines = []
         for line in self._line_segments:
             w = sum(get_visual_width(txt) for txt, _ in line)
             self._visual_lines.append(w)
-            
+
         self._last_input = content
         return content
 
@@ -968,10 +1016,10 @@ class Text(BaseComponent):
             self._update_cache()
             ay, ax = self.get_absolute_pos()
             target_w = self.get_width()
-            
+
             for i, line in enumerate(self._line_segments):
                 line_w = self._visual_lines[i]
-                
+
                 # 计算对齐偏移
                 col_offset = 0
                 if target_w > line_w:
@@ -979,13 +1027,13 @@ class Text(BaseComponent):
                         col_offset = target_w - line_w
                     elif self.align == "center":
                         col_offset = (target_w - line_w) // 2
-                
+
                 # 逐段渲染
                 curr_x = ax + col_offset
                 for txt, style in line:
                     engine.push(ay + i, curr_x, txt, style)
                     curr_x += get_visual_width(txt)
-                    
+
             super().draw(engine)
         except Exception as e:
             debug_log(f"[Text] Draw failed: {e}")
@@ -1080,7 +1128,7 @@ class LogView(BaseComponent):
         self.max_lines = max_lines
         self.markup = markup
         self.auto_scroll = auto_scroll
-        
+
         self._buffer: List[List[Tuple[str, Style]]] = []  # 扁平化的视觉行缓冲
         self.scroll_offset = 0  # 0 表示在最顶端
 
@@ -1115,13 +1163,13 @@ class LogView(BaseComponent):
     def append(self, text: str):
         """追加内容。支持多行字符串。自动进行折行处理。"""
         eff_style = self.get_effective_style()
-        
+
         if self.markup:
             # 1. 解析 Markup (返回 List[List[Tuple]])
             parsed_raw_lines = parse_markup(text, eff_style)
         else:
             # 1. 简单分行
-            parsed_raw_lines = [[(line, eff_style)] for line in text.split('\n')]
+            parsed_raw_lines = [[(line, eff_style)] for line in text.split("\n")]
 
         # 2. 对每一原始行进行视觉折行
         for segments in parsed_raw_lines:
@@ -1141,11 +1189,11 @@ class LogView(BaseComponent):
         """滚动视图。负数向上，正数向下。"""
         if not self._buffer:
             return
-            
+
         max_offset = max(0, len(self._buffer) - self.height)
         new_offset = self.scroll_offset + delta
         self.scroll_offset = max(0, min(new_offset, max_offset))
-        
+
         # 如果用户向上滚动，暂时关闭自动滚动
         if delta < 0:
             self.auto_scroll = False
@@ -1188,23 +1236,23 @@ class LogView(BaseComponent):
         try:
             ay, ax = self.get_absolute_pos()
             eff = self.get_effective_style()
-            
+
             # 1. 清理背景
             engine.clear_rect(ay, ax, self.height, self.width, style=eff)
-            
+
             # 2. 获取可见切片
             visible_lines = self._buffer[self.scroll_offset : self.scroll_offset + self.height]
-            
+
             # 3. 逐行渲染
             for i, line in enumerate(visible_lines):
                 curr_x = ax
                 for txt, style in line:
                     engine.push(ay + i, curr_x, txt, style)
                     curr_x += get_visual_width(txt)
-            
+
             # 4. 绘制滚动条指示器（可选，为了轻量暂不实现复杂滑块）
             # 可以在此处简单 push 一个字符表示状态
-            
+
             super().draw(engine)
         except Exception as e:
             debug_log(f"[LogView] Draw failed: {e}")
@@ -1241,15 +1289,15 @@ class VStack(BaseComponent):
         **kwargs,
     ):
         super().__init__(
-            pos=pos, 
-            style=style, 
-            layer=layer, 
-            visible=visible, 
+            pos=pos,
+            style=style,
+            layer=layer,
+            visible=visible,
             clipping=clipping,
             culling=culling,
             focus_style=focus_style,
             children=children,
-            **kwargs
+            **kwargs,
         )
         self._gap = gap
         self._align = align
@@ -1292,7 +1340,7 @@ class VStack(BaseComponent):
             idx = ordered.index(child)
         except ValueError:
             return (py, px)
-            
+
         row = sum(c.get_height() + self.gap for c in ordered[:idx])
         col_offset = 0
         if self.align != "left":
@@ -1342,15 +1390,15 @@ class HStack(BaseComponent):
         **kwargs,
     ):
         super().__init__(
-            pos=pos, 
-            style=style, 
-            layer=layer, 
-            visible=visible, 
+            pos=pos,
+            style=style,
+            layer=layer,
+            visible=visible,
             clipping=clipping,
             culling=culling,
             focus_style=focus_style,
             children=children,
-            **kwargs
+            **kwargs,
         )
         self._gap = gap
         self._align = align
@@ -1393,7 +1441,7 @@ class HStack(BaseComponent):
             idx = ordered.index(child)
         except ValueError:
             return (py, px)
-            
+
         col = sum(c.get_width() + self.gap for c in ordered[:idx])
         row_offset = 0
         if self.align != "top":

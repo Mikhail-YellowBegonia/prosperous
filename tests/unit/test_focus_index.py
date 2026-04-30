@@ -96,8 +96,10 @@ class TestBuild:
     def test_different_scrollboxes_produce_different_layers(self):
         sb1 = ScrollBox(pos=(0, 0), width=20, height=10)
         sb2 = ScrollBox(pos=(20, 0), width=20, height=10)
-        c1 = _fc(); sb1.add_child(c1)
-        c2 = _fc(); sb2.add_child(c2)
+        c1 = _fc()
+        sb1.add_child(c1)
+        c2 = _fc()
+        sb2.add_child(c2)
 
         idx = FocusSpatialIndex()
         idx.build([c1, c2])
@@ -108,7 +110,8 @@ class TestBuild:
 
     def test_global_and_scrollbox_components_produce_two_layers(self):
         sb = ScrollBox(pos=(0, 0), width=20, height=10)
-        c_in = _fc(); sb.add_child(c_in)
+        c_in = _fc()
+        sb.add_child(c_in)
         c_out = _fc()
 
         idx = FocusSpatialIndex()
@@ -121,23 +124,26 @@ class TestBuild:
         outer = ScrollBox(pos=(0, 0), width=40, height=20)
         inner = ScrollBox(pos=(0, 0), width=20, height=10)
         outer.add_child(inner)
-        c = _fc(); inner.add_child(c)
+        c = _fc()
+        inner.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
-        assert idx.get_layer(c).clip_owner is inner   # 最近祖先，非 outer
+        assert idx.get_layer(c).clip_owner is inner  # 最近祖先，非 outer
 
     def test_clipping_false_box_does_not_create_boundary(self):
         box = Box(pos=(0, 0), width=20, height=10, clipping=False)
-        c = _fc(); box.add_child(c)
+        c = _fc()
+        box.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
-        assert idx.get_layer(c).clip_owner is None    # Box 不裁剪 → 全局层
+        assert idx.get_layer(c).clip_owner is None  # Box 不裁剪 → 全局层
 
     def test_clipping_true_box_creates_boundary(self):
         box = Box(pos=(0, 0), width=20, height=10, clipping=True)
-        c = _fc(); box.add_child(c)
+        c = _fc()
+        box.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
@@ -145,14 +151,15 @@ class TestBuild:
 
     def test_rebuild_replaces_previous_index(self):
         sb = ScrollBox(pos=(0, 0), width=20, height=10)
-        c1 = _fc(); sb.add_child(c1)
-        c2 = _fc()   # 全局，不在任何容器内
+        c1 = _fc()
+        sb.add_child(c1)
+        c2 = _fc()  # 全局，不在任何容器内
 
         idx = FocusSpatialIndex()
         idx.build([c1])
         assert idx.get_layer(c1) is not None
 
-        idx.build([c2])   # 重建，c1 不再在索引中
+        idx.build([c2])  # 重建，c1 不再在索引中
         assert idx.get_layer(c2) is not None
         assert idx.get_layer(c1) is None
 
@@ -181,7 +188,8 @@ class TestClipRect:
         # ScrollBox at (0,0), w=10, h=6
         # push_clip: (0+1, 0+1, 6-2, 10-2) = (1, 1, 4, 8)
         sb = ScrollBox(pos=(0, 0), width=10, height=6)
-        c = _fc(); sb.add_child(c)
+        c = _fc()
+        sb.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
@@ -191,7 +199,8 @@ class TestClipRect:
         # ScrollBox at (5, 10), w=40, h=20
         # push_clip: (6, 11, 18, 38)
         sb = ScrollBox(pos=(5, 10), width=40, height=20)
-        c = _fc(); sb.add_child(c)
+        c = _fc()
+        sb.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
@@ -201,7 +210,8 @@ class TestClipRect:
         # Box (clipping=True) at (2, 3), w=14, h=8
         # push_clip: (3, 4, 6, 12)
         box = Box(pos=(2, 3), width=14, height=8, clipping=True)
-        c = _fc(); box.add_child(c)
+        c = _fc()
+        box.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
@@ -211,7 +221,8 @@ class TestClipRect:
         outer = ScrollBox(pos=(0, 0), width=40, height=20)
         inner = ScrollBox(pos=(0, 0), width=20, height=10)
         outer.add_child(inner)
-        c = _fc(); inner.add_child(c)
+        c = _fc()
+        inner.add_child(c)
 
         idx = FocusSpatialIndex()
         idx.build([c])
@@ -240,14 +251,16 @@ class TestGetLayer:
 
     def test_returns_correct_layer_for_container_component(self):
         sb = ScrollBox(pos=(0, 0), width=20, height=10)
-        c = _fc(); sb.add_child(c)
+        c = _fc()
+        sb.add_child(c)
         idx = FocusSpatialIndex()
         idx.build([c])
         assert idx.get_layer(c).clip_owner is sb
 
     def test_two_components_in_different_layers_get_different_objects(self):
         sb = ScrollBox(pos=(0, 0), width=20, height=10)
-        c_in = _fc(); sb.add_child(c_in)
+        c_in = _fc()
+        sb.add_child(c_in)
         c_out = _fc()
         idx = FocusSpatialIndex()
         idx.build([c_in, c_out])
@@ -256,7 +269,8 @@ class TestGetLayer:
     def test_two_components_in_same_layer_get_same_object(self):
         sb = ScrollBox(pos=(0, 0), width=20, height=10)
         c1, c2 = _fc(), _fc()
-        sb.add_child(c1); sb.add_child(c2)
+        sb.add_child(c1)
+        sb.add_child(c2)
         idx = FocusSpatialIndex()
         idx.build([c1, c2])
         assert idx.get_layer(c1) is idx.get_layer(c2)
@@ -279,12 +293,13 @@ class TestAbsRectAccessibility:
     def test_scrollbox_component_abs_rect_offset_by_border(self):
         # ScrollBox at (0,0), padding=0 → content origin (1,1)
         sb = ScrollBox(pos=(0, 0), width=20, height=10, padding=0)
-        c = _fc(pos=(0, 0)); sb.add_child(c)
+        c = _fc(pos=(0, 0))
+        sb.add_child(c)
         idx = FocusSpatialIndex()
         idx.build([c])
 
         y, x, h, w = c.get_abs_rect()
-        assert y == 1   # border offset
+        assert y == 1  # border offset
         assert x == 1
         assert h == 1
         assert w == 5
@@ -292,7 +307,8 @@ class TestAbsRectAccessibility:
     def test_scrollbox_with_padding_offsets_correctly(self):
         # ScrollBox at (0,0), padding=2 → content origin (1+2, 1+2) = (3, 3)
         sb = ScrollBox(pos=(0, 0), width=20, height=10, padding=2)
-        c = _fc(pos=(0, 0)); sb.add_child(c)
+        c = _fc(pos=(0, 0))
+        sb.add_child(c)
         idx = FocusSpatialIndex()
         idx.build([c])
 
@@ -335,9 +351,9 @@ class TestAbsRectAccessibility:
 
         # content origin = (1, 1)；VStack 各项紧密堆叠
         rects = [c.get_abs_rect() for c in cs]
-        assert rects[0][0] == 1   # c0 at row 1
-        assert rects[1][0] == 2   # c1 at row 2
-        assert rects[2][0] == 3   # c2 at row 3
+        assert rects[0][0] == 1  # c0 at row 1
+        assert rects[1][0] == 2  # c1 at row 2
+        assert rects[2][0] == 3  # c2 at row 3
 
 
 # ── find_next() ───────────────────────────────────────────────────────────────
@@ -352,7 +368,8 @@ def _vstack_in_scrollbox(n, *, row=0, col=0, sb_h=30, sb_w=20):
     for item in items:
         vs.add_child(item)
     # 暖缓存：确保 dirty 传播正确
-    sb.get_abs_rect(); vs.get_abs_rect()
+    sb.get_abs_rect()
+    vs.get_abs_rect()
     for item in items:
         item.get_abs_rect()
     return sb, items
@@ -408,9 +425,9 @@ class TestFindNext:
 
     def test_prefers_aligned_candidate_over_diagonal(self):
         # c_target 正下方，c_diag 斜下方较近——应选 c_target
-        c_cur    = _fc(pos=(0,  5))
-        c_target = _fc(pos=(4,  5))   # 正下方 4 格，副轴距离 0
-        c_diag   = _fc(pos=(2,  0))   # 斜下方，主轴 2，副轴 5 → score=12
+        c_cur = _fc(pos=(0, 5))
+        c_target = _fc(pos=(4, 5))  # 正下方 4 格，副轴距离 0
+        c_diag = _fc(pos=(2, 0))  # 斜下方，主轴 2，副轴 5 → score=12
         # c_target: primary=4, secondary=0 → score=4
         idx = FocusSpatialIndex()
         idx.build([c_cur, c_target, c_diag])
@@ -432,9 +449,11 @@ class TestFindNext:
         # c_in 在 ScrollBox 内，c_out 在全局层
         # 从 c_in 向下导航，不应选到跨层的 c_out
         sb = ScrollBox(pos=(0, 0), width=20, height=30, padding=0)
-        c_in = _fc(pos=(0, 0)); sb.add_child(c_in)
-        c_out = _fc(pos=(5, 0))   # 全局层，位置更低
-        sb.get_abs_rect(); c_in.get_abs_rect()
+        c_in = _fc(pos=(0, 0))
+        sb.add_child(c_in)
+        c_out = _fc(pos=(5, 0))  # 全局层，位置更低
+        sb.get_abs_rect()
+        c_in.get_abs_rect()
 
         idx = FocusSpatialIndex()
         idx.build([c_in, c_out])
@@ -465,15 +484,15 @@ class TestFocusManagerSpatialIntegration:
     def test_arrow_up_moves_spatially(self):
         fm, items = self._make_fm_with_vstack(4)
         fm.handle_input("DOWN")
-        fm.handle_input("DOWN")   # 到 items[2]
+        fm.handle_input("DOWN")  # 到 items[2]
         fm.handle_input("UP")
         assert fm.get_focused() is items[1]
 
     def test_arrow_down_at_last_stays(self):
         fm, items = self._make_fm_with_vstack(3)
         fm.handle_input("DOWN")
-        fm.handle_input("DOWN")   # 到 items[2]（最后一项）
-        fm.handle_input("DOWN")   # 无候选，退回线性循环 → wrap 到 items[0]
+        fm.handle_input("DOWN")  # 到 items[2]（最后一项）
+        fm.handle_input("DOWN")  # 无候选，退回线性循环 → wrap 到 items[0]
         # 退回线性：(2+1) % 3 = 0
         assert fm.get_focused() is items[0]
 
@@ -483,5 +502,5 @@ class TestFocusManagerSpatialIntegration:
         assert fm.get_focused() is items[1]
         fm.handle_input("TAB")
         assert fm.get_focused() is items[2]
-        fm.handle_input("TAB")   # 线性 wrap
+        fm.handle_input("TAB")  # 线性 wrap
         assert fm.get_focused() is items[0]

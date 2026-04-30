@@ -10,19 +10,19 @@ IMG_PATH = os.path.join(os.path.dirname(__file__), "img", "square_cat.png")
 TARGET_W = 20
 GAP = 2
 
-images.register("color",          IMG_PATH, TARGET_W, mode="color")
-images.register("binmap",         IMG_PATH, TARGET_W, mode="binmap",        fg=(255, 255, 255))
-images.register("binmap_color",   IMG_PATH, TARGET_W, mode="binmap_color")
-images.register("braille6",       IMG_PATH, TARGET_W, mode="braille6",      fg=(255, 255, 255))
+images.register("color", IMG_PATH, TARGET_W, mode="color")
+images.register("binmap", IMG_PATH, TARGET_W, mode="binmap", fg=(255, 255, 255))
+images.register("binmap_color", IMG_PATH, TARGET_W, mode="binmap_color")
+images.register("braille6", IMG_PATH, TARGET_W, mode="braille6", fg=(255, 255, 255))
 images.register("braille6_color", IMG_PATH, TARGET_W, mode="braille6_color")
 
 STRIDE = TARGET_W + GAP
 METHODS = [
-    ("half-block (color)",  0,          "color"),
-    ("binmap     (mono)",   STRIDE,     "binmap"),
-    ("binmap     (color)",  STRIDE * 2, "binmap_color"),
-    ("braille6   (mono)",   STRIDE * 3, "braille6"),
-    ("braille6   (color)",  STRIDE * 4, "braille6_color"),
+    ("half-block (color)", 0, "color"),
+    ("binmap     (mono)", STRIDE, "binmap"),
+    ("binmap     (color)", STRIDE * 2, "binmap_color"),
+    ("braille6   (mono)", STRIDE * 3, "braille6"),
+    ("braille6   (color)", STRIDE * 4, "braille6_color"),
 ]
 
 with Live(fps=10) as live:

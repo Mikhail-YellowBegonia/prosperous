@@ -17,8 +17,9 @@ from .components import (
     VStack,
     HStack,
     ScrollBox,
+    FocusTreeNotifier,
 )
-from .interaction import FocusManager
+from .interaction import FocusManager, FocusNode, FocusSpatialIndex, FocusLayer
 from .styles import Style, DEFAULT_STYLE, BOX_SINGLE, BOX_DOUBLE
 from .theme import DEFAULT_THEME, set_theme, get_theme
 from .animation import Tween, Kinetic, linear, ease_in, ease_out, ease_in_out
